@@ -1492,39 +1492,42 @@ PyArray_LexSort(PyObject *sort_keys, int axis)
  * the same comparable type.
  *
  * @param arr 1d, strided, sorted array to be searched.
- * @param key contiguous array of keys.
- * @param ret contiguous array of intp for returned indices.
+ * @param iter an iterator over the keys to be searched and the return array
  * @return void
  */
 static void
-local_search_left(PyArrayObject *arr, PyArrayObject *key, PyArrayObject *ret)
+local_search_left(PyArrayObject *arr, NpyIter *iter)
 {
-    PyArray_CompareFunc *compare = PyArray_DESCR(key)->f->compare;
+    PyArray_CompareFunc *compare = PyArray_DESCR(arr)->f->compare;
+    char *pkey, *parr = PyArray_DATA(arr);
     npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
-    npy_intp nkeys = PyArray_SIZE(key);
-    char *parr = PyArray_DATA(arr);
-    char *pkey = PyArray_DATA(key);
-    npy_intp *pret = (npy_intp *)PyArray_DATA(ret);
-    int elsize = PyArray_DESCR(key)->elsize;
     npy_intp arrstride = *PyArray_STRIDES(arr);
-    npy_intp i;
+    npy_intp *pret, i;
+    NpyIter_IterNextFunc *iternext = NpyIter_GetIterNext(iter, NULL);
+    npy_intp *innerstride = NpyIter_GetInnerStrideArray(iter);
+    npy_intp *innersizeptr = NpyIter_GetInnerLoopSizePtr(iter);
+    char **dataptrarray = NpyIter_GetDataPtrArray(iter);
 
-    for (i = 0; i < nkeys; ++i) {
-        npy_intp imin = 0;
-        npy_intp imax = nelts;
-        while (imin < imax) {
-            npy_intp imid = imin + ((imax - imin) >> 1);
-            if (compare(parr + arrstride*imid, pkey, key) < 0) {
-                imin = imid + 1;
+    do {
+        pkey = dataptrarray[0];
+        pret = (npy_intp *)dataptrarray[1];
+        for (i = 0; i < *innersizeptr; i++) {
+            npy_intp imin = 0;
+            npy_intp imax = nelts;
+            while (imin < imax) {
+                npy_intp imid = imin + ((imax - imin) >> 1);
+                if (compare(parr + arrstride*imid, pkey, arr) < 0) {
+                    imin = imid + 1;
+                }
+                else {
+                    imax = imid;
+                }
             }
-            else {
-                imax = imid;
-            }
+            *pret = imin;
+            pret += 1;
+            pkey += innerstride[0];
         }
-        *pret = imin;
-        pret += 1;
-        pkey += elsize;
-    }
+    } while (iternext(iter));
 }
 
 
@@ -1536,40 +1539,44 @@ local_search_left(PyArrayObject *arr, PyArrayObject *key, PyArrayObject *ret)
  * the same comparable type.
  *
  * @param arr 1d, strided, sorted array to be searched.
- * @param key contiguous array of keys.
- * @param ret contiguous array of intp for returned indices.
+ * @param iter an iterator over the keys to be searched and the return array
  * @return void
  */
 static void
-local_search_right(PyArrayObject *arr, PyArrayObject *key, PyArrayObject *ret)
+local_search_right(PyArrayObject *arr, NpyIter *iter)
 {
-    PyArray_CompareFunc *compare = PyArray_DESCR(key)->f->compare;
+    PyArray_CompareFunc *compare = PyArray_DESCR(arr)->f->compare;
+    char *pkey, *parr = PyArray_DATA(arr);
     npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
-    npy_intp nkeys = PyArray_SIZE(key);
-    char *parr = PyArray_DATA(arr);
-    char *pkey = PyArray_DATA(key);
-    npy_intp *pret = (npy_intp *)PyArray_DATA(ret);
-    int elsize = PyArray_DESCR(key)->elsize;
     npy_intp arrstride = *PyArray_STRIDES(arr);
-    npy_intp i;
+    npy_intp *pret, i;
+    NpyIter_IterNextFunc *iternext = NpyIter_GetIterNext(iter, NULL);
+    npy_intp *innerstride = NpyIter_GetInnerStrideArray(iter);
+    npy_intp *innersizeptr = NpyIter_GetInnerLoopSizePtr(iter);
+    char **dataptrarray = NpyIter_GetDataPtrArray(iter);
 
-    for(i = 0; i < nkeys; ++i) {
-        npy_intp imin = 0;
-        npy_intp imax = nelts;
-        while (imin < imax) {
-            npy_intp imid = imin + ((imax - imin) >> 1);
-            if (compare(parr + arrstride*imid, pkey, key) <= 0) {
-                imin = imid + 1;
+    do {
+        pkey = dataptrarray[0];
+        pret = (npy_intp *)dataptrarray[1];
+        for (i = 0; i < *innersizeptr; i++) {
+            npy_intp imin = 0;
+            npy_intp imax = nelts;
+            while (imin < imax) {
+                npy_intp imid = imin + ((imax - imin) >> 1);
+                if (compare(parr + arrstride*imid, pkey, arr) <= 0) {
+                    imin = imid + 1;
+                }
+                else {
+                    imax = imid;
+                }
             }
-            else {
-                imax = imid;
-            }
+            *pret = imin;
+            pret += 1;
+            pkey += innerstride[0];
         }
-        *pret = imin;
-        pret += 1;
-        pkey += elsize;
-    }
+    } while (iternext(iter));
 }
+
 
 /** @brief Use bisection of sorted array to find first entries >= keys.
  *
@@ -1579,48 +1586,52 @@ local_search_right(PyArrayObject *arr, PyArrayObject *key, PyArrayObject *ret)
  * the same comparable type.
  *
  * @param arr 1d, strided array to be searched.
- * @param key contiguous array of keys.
+ * @param iter an iterator over the keys to be searched and the return array
  * @param sorter 1d, strided array of intp that sorts arr.
- * @param ret contiguous array of intp for returned indices.
  * @return int
  */
 static int
-local_argsearch_left(PyArrayObject *arr, PyArrayObject *key,
-                     PyArrayObject *sorter, PyArrayObject *ret)
+local_argsearch_left(PyArrayObject *arr, NpyIter *iter,
+                     PyArrayObject *sorter)
 {
-    PyArray_CompareFunc *compare = PyArray_DESCR(key)->f->compare;
-    npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
-    npy_intp nkeys = PyArray_SIZE(key);
+    PyArray_CompareFunc *compare = PyArray_DESCR(arr)->f->compare;
     char *parr = PyArray_DATA(arr);
-    char *pkey = PyArray_DATA(key);
     char *psorter = PyArray_DATA(sorter);
-    npy_intp *pret = (npy_intp *)PyArray_DATA(ret);
-    int elsize = PyArray_DESCR(key)->elsize;
+    char *pkey;
+    npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
     npy_intp arrstride = *PyArray_STRIDES(arr);
     npy_intp sorterstride = *PyArray_STRIDES(sorter);
-    npy_intp i;
+    npy_intp *pret, i;
+    NpyIter_IterNextFunc *iternext = NpyIter_GetIterNext(iter, NULL);
+    npy_intp *innerstride = NpyIter_GetInnerStrideArray(iter);
+    npy_intp *innersizeptr = NpyIter_GetInnerLoopSizePtr(iter);
+    char **dataptrarray = NpyIter_GetDataPtrArray(iter);
 
-    for (i = 0; i < nkeys; ++i) {
-        npy_intp imin = 0;
-        npy_intp imax = nelts;
-        while (imin < imax) {
-            npy_intp imid = imin + ((imax - imin) >> 1);
-            npy_intp indx = *(npy_intp *)(psorter + sorterstride * imid);
+    do {
+        pkey = dataptrarray[0];
+        pret = (npy_intp *)dataptrarray[1];
+        for (i = 0; i < *innersizeptr; ++i) {
+            npy_intp imin = 0;
+            npy_intp imax = nelts;
+            while (imin < imax) {
+                npy_intp imid = imin + ((imax - imin) >> 1);
+                npy_intp indx = *(npy_intp *)(psorter + sorterstride * imid);
 
-            if (indx < 0 || indx >= nelts) {
-                return -1;
+                if (indx < 0 || indx >= nelts) {
+                    return -1;
+                }
+                if (compare(parr + arrstride*indx, pkey, arr) < 0) {
+                    imin = imid + 1;
+                }
+                else {
+                    imax = imid;
+                }
             }
-            if (compare(parr + arrstride*indx, pkey, key) < 0) {
-                imin = imid + 1;
-            }
-            else {
-                imax = imid;
-            }
+            *pret = imin;
+            pret += 1;
+            pkey += innerstride[0];
         }
-        *pret = imin;
-        pret += 1;
-        pkey += elsize;
-    }
+    } while (iternext(iter));
     return 0;
 }
 
@@ -1633,48 +1644,52 @@ local_argsearch_left(PyArrayObject *arr, PyArrayObject *key,
  * the same comparable type.
  *
  * @param arr 1d, strided array to be searched.
- * @param key contiguous array of keys.
+ * @param iter an iterator over the keys to be searched and the return array
  * @param sorter 1d, strided array of intp that sorts arr.
- * @param ret contiguous array of intp for returned indices.
  * @return int
  */
 static int
-local_argsearch_right(PyArrayObject *arr, PyArrayObject *key,
-                      PyArrayObject *sorter, PyArrayObject *ret)
+local_argsearch_right(PyArrayObject *arr, NpyIter *iter,
+                      PyArrayObject *sorter)
 {
-    PyArray_CompareFunc *compare = PyArray_DESCR(key)->f->compare;
-    npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
-    npy_intp nkeys = PyArray_SIZE(key);
+    PyArray_CompareFunc *compare = PyArray_DESCR(arr)->f->compare;
     char *parr = PyArray_DATA(arr);
-    char *pkey = PyArray_DATA(key);
     char *psorter = PyArray_DATA(sorter);
-    npy_intp *pret = (npy_intp *)PyArray_DATA(ret);
-    int elsize = PyArray_DESCR(key)->elsize;
+    char *pkey;
+    npy_intp nelts = PyArray_DIMS(arr)[PyArray_NDIM(arr) - 1];
     npy_intp arrstride = *PyArray_STRIDES(arr);
     npy_intp sorterstride = *PyArray_STRIDES(sorter);
-    npy_intp i;
+    npy_intp *pret, i;
+    NpyIter_IterNextFunc *iternext = NpyIter_GetIterNext(iter, NULL);
+    npy_intp *innerstride = NpyIter_GetInnerStrideArray(iter);
+    npy_intp *innersizeptr = NpyIter_GetInnerLoopSizePtr(iter);
+    char **dataptrarray = NpyIter_GetDataPtrArray(iter);
 
-    for(i = 0; i < nkeys; ++i) {
-        npy_intp imin = 0;
-        npy_intp imax = nelts;
-        while (imin < imax) {
-            npy_intp imid = imin + ((imax - imin) >> 1);
-            npy_intp indx = *(npy_intp *)(psorter + sorterstride * imid);
+    do {
+        pkey = dataptrarray[0];
+        pret = (npy_intp *)dataptrarray[1];
+        for (i = 0; i < *innersizeptr; ++i) {
+            npy_intp imin = 0;
+            npy_intp imax = nelts;
+            while (imin < imax) {
+                npy_intp imid = imin + ((imax - imin) >> 1);
+                npy_intp indx = *(npy_intp *)(psorter + sorterstride * imid);
 
-            if (indx < 0 || indx >= nelts) {
-                return -1;
+                if (indx < 0 || indx >= nelts) {
+                    return -1;
+                }
+                if (compare(parr + arrstride*indx, pkey, arr) <= 0) {
+                    imin = imid + 1;
+                }
+                else {
+                    imax = imid;
+                }
             }
-            if (compare(parr + arrstride*indx, pkey, key) <= 0) {
-                imin = imid + 1;
-            }
-            else {
-                imax = imid;
-            }
+            *pret = imin;
+            pret += 1;
+            pkey += innerstride[0];
         }
-        *pret = imin;
-        pret += 1;
-        pkey += elsize;
-    }
+    } while (iternext(iter));
     return 0;
 }
 
@@ -1718,6 +1733,10 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
     PyArrayObject *ret = NULL;
     PyArray_Descr *dtype;
     int ap1_flags = NPY_ARRAY_NOTSWAPPED | NPY_ARRAY_ALIGNED;
+    NpyIter *iter;
+    PyArrayObject *iter_op[2];
+    PyArray_Descr *iter_dtype[2];
+    npy_uint32 iter_flags[2];
     NPY_BEGIN_THREADS_DEF;
 
     /* Find common type */
@@ -1726,17 +1745,14 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
         return NULL;
     }
 
-    /* need ap2 as contiguous array and of right type */
-    Py_INCREF(dtype);
-    ap2 = (PyArrayObject *)PyArray_CheckFromAny(op2, dtype,
-                                0, 0,
-                                NPY_ARRAY_CARRAY_RO | NPY_ARRAY_NOTSWAPPED,
-                                NULL);
+    /* need ap2 as an array */
+    ap2 = (PyArrayObject *)PyArray_FROM_O(op2);
     if (ap2 == NULL) {
-        Py_DECREF(dtype);
         return NULL;
     }
 
+    /* If the haystack is bigger than the needle we copy the haystack for
+     * faster search */
     if (PyArray_SIZE(ap2) > PyArray_SIZE(op1)) {
         ap1_flags |= NPY_ARRAY_CARRAY_RO;
     }
@@ -1747,7 +1763,7 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
         goto fail;
     }
     /* check that comparison function exists */
-    if (PyArray_DESCR(ap2)->f->compare == NULL) {
+    if (PyArray_DESCR(ap1)->f->compare == NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "compare not supported for type");
         goto fail;
@@ -1785,42 +1801,51 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
         }
     }
 
-    /* ret is a contiguous array of intp type to hold returned indices */
-    ret = (PyArrayObject *)PyArray_New(Py_TYPE(ap2), PyArray_NDIM(ap2),
-                                       PyArray_DIMS(ap2), NPY_INTP,
-                                       NULL, NULL, 0, 0, (PyObject *)ap2);
-    if (ret == NULL) {
+    /* Make iterator and allocate return array */
+    iter_op[0] = ap2;
+    iter_op[1] = NULL;
+    iter_flags[0] = NPY_ITER_ALIGNED | NPY_ITER_READONLY | NPY_ITER_NBO;
+    iter_flags[1] = NPY_ITER_ALLOCATE | NPY_ITER_WRITEONLY | NPY_ITER_NBO;
+    iter_dtype[0] = dtype;
+    iter_dtype[1] = PyArray_DescrFromType(NPY_INTP);
+    iter = NpyIter_MultiNew(2, iter_op,
+            NPY_ITER_EXTERNAL_LOOP | NPY_ITER_BUFFERED,
+            NPY_KEEPORDER,
+            NPY_SAFE_CASTING, iter_flags, iter_dtype);
+    Py_DECREF(iter_dtype[1]);
+
+    if (iter == NULL) {
         goto fail;
     }
 
     if (ap3 == NULL) {
         if (side == NPY_SEARCHLEFT) {
-            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap2));
-            local_search_left(ap1, ap2, ret);
-            NPY_END_THREADS_DESCR(PyArray_DESCR(ap2));
+            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap1));
+            local_search_left(ap1, iter);
+            NPY_END_THREADS_DESCR(PyArray_DESCR(ap1));
         }
         else if (side == NPY_SEARCHRIGHT) {
-            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap2));
-            local_search_right(ap1, ap2, ret);
-            NPY_END_THREADS_DESCR(PyArray_DESCR(ap2));
+            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap1));
+            local_search_right(ap1, iter);
+            NPY_END_THREADS_DESCR(PyArray_DESCR(ap1));
         }
     }
     else {
         int err=0;
-
         if (side == NPY_SEARCHLEFT) {
-            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap2));
-            err = local_argsearch_left(ap1, ap2, sorter, ret);
-            NPY_END_THREADS_DESCR(PyArray_DESCR(ap2));
+            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap1));
+            err = local_argsearch_left(ap1, iter, sorter);
+            NPY_END_THREADS_DESCR(PyArray_DESCR(ap1));
         }
         else if (side == NPY_SEARCHRIGHT) {
-            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap2));
-            err = local_argsearch_right(ap1, ap2, sorter, ret);
-            NPY_END_THREADS_DESCR(PyArray_DESCR(ap2));
+            NPY_BEGIN_THREADS_DESCR(PyArray_DESCR(ap1));
+            err = local_argsearch_right(ap1, iter, sorter);
+            NPY_END_THREADS_DESCR(PyArray_DESCR(ap1));
         }
         if (err < 0) {
             PyErr_SetString(PyExc_ValueError,
                     "Sorter index out of range.");
+            NpyIter_Deallocate(iter);
             goto fail;
         }
         Py_DECREF(ap3);
@@ -1828,6 +1853,12 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
     }
     Py_DECREF(ap1);
     Py_DECREF(ap2);
+    ret = NpyIter_GetOperandArray(iter)[1];
+    Py_INCREF(ret);
+    if (NpyIter_Deallocate(iter) != NPY_SUCCEED){
+        Py_DECREF(ret);
+        goto fail;
+    }
     return (PyObject *)ret;
 
  fail:
@@ -1835,7 +1866,6 @@ PyArray_SearchSorted(PyArrayObject *op1, PyObject *op2,
     Py_XDECREF(ap2);
     Py_XDECREF(ap3);
     Py_XDECREF(sorter);
-    Py_XDECREF(ret);
     return NULL;
 }
 
