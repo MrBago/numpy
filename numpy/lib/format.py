@@ -35,7 +35,7 @@ Capabilities
 
 - Is straightforward to reverse engineer. Datasets often live longer than
   the programs that created them. A competent developer should be
-  able create a solution in his preferred programming language to
+  able to create a solution in his preferred programming language to
   read most ``.npy`` files that he has been given without much
   documentation.
 
@@ -134,16 +134,21 @@ The ``.npy`` format, including reasons for creating it and a comparison of
 alternatives, is described fully in the "npy-format" NEP.
 
 """
-
-import cPickle
+from __future__ import division, absolute_import, print_function
 
 import numpy
 import sys
 from numpy.lib.utils import safe_eval
-from numpy.compat import asbytes, isfileobj
+from numpy.compat import asbytes, isfileobj, long, basestring
+
+if sys.version_info[0] >= 3:
+    import pickle
+else:
+    import cPickle as pickle
 
 MAGIC_PREFIX = asbytes('\x93NUMPY')
 MAGIC_LEN = len(MAGIC_PREFIX) + 2
+BUFFER_SIZE = 2 ** 18 #size of buffer for reading npz files in bytes
 
 def magic(major, minor):
     """ Return the magic string for the given file format version.
@@ -310,7 +315,7 @@ def read_array_header_1_0(fp):
 
     Raises
     ------
-    ValueError :
+    ValueError
         If the data is invalid.
 
     """
@@ -340,8 +345,7 @@ def read_array_header_1_0(fp):
     if not isinstance(d, dict):
         msg = "Header is not a dictionary: %r"
         raise ValueError(msg % d)
-    keys = d.keys()
-    keys.sort()
+    keys = sorted(d.keys())
     if keys != ['descr', 'fortran_order', 'shape']:
         msg = "Header does not contain the correct keys: %r"
         raise ValueError(msg % (keys,))
@@ -398,7 +402,7 @@ def write_array(fp, array, version=(1,0)):
     if array.dtype.hasobject:
         # We contain Python objects so we cannot write out the data directly.
         # Instead, we will pickle it out with version 2 of the pickle protocol.
-        cPickle.dump(array, fp, protocol=2)
+        pickle.dump(array, fp, protocol=2)
     elif array.flags.f_contiguous and not array.flags.c_contiguous:
         if isfileobj(fp):
             array.T.tofile(fp)
@@ -446,7 +450,7 @@ def read_array(fp):
     # Now read the actual data.
     if dtype.hasobject:
         # The array contained Python objects. We need to unpickle the data.
-        array = cPickle.load(fp)
+        array = pickle.load(fp)
     else:
         if isfileobj(fp):
             # We can use the fast fromfile() function.
@@ -454,9 +458,22 @@ def read_array(fp):
         else:
             # This is not a real file. We have to read it the memory-intensive
             # way.
-            # XXX: we can probably chunk this to avoid the memory hit.
-            data = fp.read(int(count * dtype.itemsize))
-            array = numpy.fromstring(data, dtype=dtype, count=count)
+            # crc32 module fails on reads greater than 2 ** 32 bytes, breaking
+            # large reads from gzip streams. Chunk reads to BUFFER_SIZE bytes to
+            # avoid issue and reduce memory overhead of the read. In
+            # non-chunked case count < max_read_count, so only one read is
+            # performed.
+
+            max_read_count = BUFFER_SIZE // dtype.itemsize
+
+            array = numpy.empty(count, dtype=dtype)
+
+            for i in range(0, count, max_read_count):
+                read_count = min(max_read_count, count - i)
+
+                data = fp.read(int(read_count * dtype.itemsize))
+                array[i:i+read_count] = numpy.frombuffer(data, dtype=dtype,
+                                                         count=read_count)
 
         if fortran_order:
             array.shape = shape[::-1]

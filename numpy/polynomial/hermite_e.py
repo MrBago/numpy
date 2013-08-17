@@ -57,13 +57,13 @@ See also
 `numpy.polynomial`
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 import numpy.linalg as la
-import polyutils as pu
+from . import polyutils as pu
 import warnings
-from polytemplate import polytemplate
+from .polytemplate import polytemplate
 
 __all__ = ['hermezero', 'hermeone', 'hermex', 'hermedomain', 'hermeline',
     'hermeadd', 'hermesub', 'hermemulx', 'hermemul', 'hermediv', 'hermpow',
@@ -160,7 +160,7 @@ def herme2poly(c) :
     array([ 0.,  1.,  2.,  3.])
 
     """
-    from polynomial import polyadd, polysub, polymulx
+    from .polynomial import polyadd, polysub, polymulx
 
     [c] = pu.as_series([c])
     n = len(c)
@@ -646,7 +646,7 @@ def hermeder(c, m=1, scl=1, axis=0) :
 
     Parameters
     ----------
-    c: array_like
+    c : array_like
         Array of Hermite_e series coefficients. If `c` is multidimensional
         the different axis correspond to different variables with the
         degree in each axis given by the corresponding index.
@@ -1198,7 +1198,7 @@ def hermevander(x, deg) :
 
     Returns
     -------
-    vander: ndarray
+    vander : ndarray
         The pseudo-Vandermonde matrix. The shape of the returned matrix is
         ``x.shape + (deg + 1,)``, where The last index is the degree of the
         corresponding HermiteE polynomial.  The dtype will be the same as
@@ -1570,7 +1570,7 @@ def hermecompanion(c):
     if len(c) < 2:
         raise ValueError('Series must have maximum degree of at least 1.')
     if len(c) == 2:
-        return np.array(-c[0]/c[1])
+        return np.array([[-c[0]/c[1]]])
 
     n = len(c) - 1
     mat = np.zeros((n, n), dtype=c.dtype)

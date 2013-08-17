@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import os
 import re
 import sys
@@ -43,8 +45,7 @@ class IBMFCompiler(FCompiler):
             # If the output of xlf does not contain version info
             # (that's the case with xlf 8.1, for instance) then
             # let's try another method:
-            l = os.listdir(xlf_dir)
-            l.sort()
+            l = sorted(os.listdir(xlf_dir))
             l.reverse()
             l = [d for d in l if os.path.isfile(os.path.join(xlf_dir,d,'xlf.cfg'))]
             if l:
@@ -74,7 +75,7 @@ class IBMFCompiler(FCompiler):
             log.info('Creating '+new_cfg)
             fi = open(xlf_cfg,'r')
             crt1_match = re.compile(r'\s*crt\s*[=]\s*(?P<path>.*)/crt1.o').match
-            for line in fi.readlines():
+            for line in fi:
                 m = crt1_match(line)
                 if m:
                     fo.write('crt = %s/bundle1.o\n' % (m.group('path')))

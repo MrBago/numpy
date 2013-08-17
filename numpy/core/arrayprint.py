@@ -1,7 +1,10 @@
 """Array printing function
 
 $Id: arrayprint.py,v 1.9 2005/09/13 13:58:44 teoliphant Exp $
+
 """
+from __future__ import division, absolute_import, print_function
+
 __all__ = ["array2string", "set_printoptions", "get_printoptions"]
 __docformat__ = 'restructuredtext'
 
@@ -13,11 +16,18 @@ __docformat__ = 'restructuredtext'
 # and by Travis Oliphant  2005-8-22 for numpy
 
 import sys
-import numerictypes as _nt
-from umath import maximum, minimum, absolute, not_equal, isnan, isinf
-from multiarray import format_longfloat, datetime_as_string, datetime_data
-from fromnumeric import ravel
+from functools import reduce
+from . import numerictypes as _nt
+from .umath import maximum, minimum, absolute, not_equal, isnan, isinf
+from .multiarray import format_longfloat, datetime_as_string, datetime_data
+from .fromnumeric import ravel
 
+if sys.version_info[0] >= 3:
+    _MAXINT = sys.maxsize
+    _MININT = -sys.maxsize - 1
+else:
+    _MAXINT = sys.maxint
+    _MININT = -sys.maxint - 1
 
 def product(x, y): return x*y
 
@@ -31,8 +41,6 @@ _nan_str = 'nan'
 _inf_str = 'inf'
 _formatter = None  # formatting function for array elements
 
-if sys.version_info[0] >= 3:
-    from functools import reduce
 
 def set_printoptions(precision=None, threshold=None, edgeitems=None,
                      linewidth=None, suppress=None,
@@ -194,7 +202,7 @@ def get_printoptions():
     return d
 
 def _leading_trailing(a):
-    import numeric as _nc
+    from . import numeric as _nc
     if a.ndim == 1:
         if len(a) > 2*_summaryEdgeItems:
             b = _nc.concatenate((a[:_summaryEdgeItems],
@@ -321,7 +329,7 @@ def _array2string(a, max_line_width, precision, suppress_small, separator=' ',
     return lst
 
 def _convert_arrays(obj):
-    import numeric as _nc
+    from . import numeric as _nc
     newtup = []
     for k in obj:
         if isinstance(k, _nc.ndarray):
@@ -396,7 +404,8 @@ def array2string(a, max_line_width=None, precision=None,
 
     Raises
     ------
-    TypeError : if a callable in `formatter` does not return a string.
+    TypeError
+        if a callable in `formatter` does not return a string.
 
     See Also
     --------
@@ -477,14 +486,14 @@ def _formatArray(a, format_function, rank, max_line_len,
     if rank == 1:
         s = ""
         line = next_line_prefix
-        for i in xrange(leading_items):
+        for i in range(leading_items):
             word = format_function(a[i]) + separator
             s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
 
         if summary_insert1:
             s, line = _extendLine(s, line, summary_insert1, max_line_len, next_line_prefix)
 
-        for i in xrange(trailing_items, 1, -1):
+        for i in range(trailing_items, 1, -1):
             word = format_function(a[-i]) + separator
             s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
 
@@ -495,7 +504,7 @@ def _formatArray(a, format_function, rank, max_line_len,
     else:
         s = '['
         sep = separator.rstrip()
-        for i in xrange(leading_items):
+        for i in range(leading_items):
             if i > 0:
                 s += next_line_prefix
             s += _formatArray(a[i], format_function, rank-1, max_line_len,
@@ -506,7 +515,7 @@ def _formatArray(a, format_function, rank, max_line_len,
         if summary_insert1:
             s += next_line_prefix + summary_insert1 + "\n"
 
-        for i in xrange(trailing_items, 1, -1):
+        for i in range(trailing_items, 1, -1):
             if leading_items or i != trailing_items:
                 s += next_line_prefix
             s += _formatArray(a[-i], format_function, rank-1, max_line_len,
@@ -536,9 +545,9 @@ class FloatFormat(object):
             pass
 
     def fillFormat(self, data):
-        import numeric as _nc
-        errstate = _nc.seterr(all='ignore')
-        try:
+        from . import numeric as _nc
+
+        with _nc.errstate(all='ignore'):
             special = isnan(data) | isinf(data)
             valid = not_equal(data, 0) & ~special
             non_zero = absolute(data.compress(valid))
@@ -553,8 +562,6 @@ class FloatFormat(object):
                 if not self.suppress_small and (min_val < 0.0001
                                            or max_val/min_val > 1000.):
                     self.exp_format = True
-        finally:
-            _nc.seterr(**errstate)
 
         if self.exp_format:
             self.large_exponent = 0 < min_val < 1e-99 or max_val >= 1e100
@@ -589,9 +596,9 @@ class FloatFormat(object):
         self.format = format
 
     def __call__(self, x, strip_zeros=True):
-        import numeric as _nc
-        err = _nc.seterr(invalid='ignore')
-        try:
+        from . import numeric as _nc
+
+        with _nc.errstate(invalid='ignore'):
             if isnan(x):
                 if self.sign:
                     return self.special_fmt % ('+' + _nan_str,)
@@ -605,8 +612,6 @@ class FloatFormat(object):
                         return self.special_fmt % (_inf_str,)
                 else:
                     return self.special_fmt % ('-' + _inf_str,)
-        finally:
-            _nc.seterr(**err)
 
         s = self.format % x
         if self.large_exponent:
@@ -630,8 +635,6 @@ def _digits(x, precision, format):
     return precision - len(s) + len(z)
 
 
-_MAXINT = sys.maxint
-_MININT = -sys.maxint-1
 class IntegerFormat(object):
     def __init__(self, data):
         try:

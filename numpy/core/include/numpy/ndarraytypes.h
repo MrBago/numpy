@@ -156,6 +156,12 @@ typedef enum {
 
 
 typedef enum {
+        NPY_INTROSELECT=0,
+} NPY_SELECTKIND;
+#define NPY_NSELECTS (NPY_INTROSELECT + 1)
+
+
+typedef enum {
         NPY_SEARCHLEFT=0,
         NPY_SEARCHRIGHT=1
 } NPY_SEARCHSIDE;
@@ -391,6 +397,12 @@ typedef int (PyArray_FillFunc)(void *, npy_intp, void *);
 
 typedef int (PyArray_SortFunc)(void *, npy_intp, void *);
 typedef int (PyArray_ArgSortFunc)(void *, npy_intp *, npy_intp, void *);
+typedef int (PyArray_PartitionFunc)(void *, npy_intp, npy_intp,
+                                    npy_intp *, npy_intp *,
+                                    void *);
+typedef int (PyArray_ArgPartitionFunc)(void *, npy_intp *, npy_intp, npy_intp,
+                                       npy_intp *, npy_intp *,
+                                       void *);
 
 typedef int (PyArray_FillWithScalarFunc)(void *, npy_intp, void *, void *);
 
@@ -627,8 +639,8 @@ typedef struct _arr_descr {
  * (PyArray_DATA and friends) to access fields here for a number of
  * releases. Direct access to the members themselves is deprecated.
  * To ensure that your code does not use deprecated access,
- * #define NPY_NO_DEPRECATED_API NPY_1_7_VERSION
- * (or NPY_1_8_VERSION or higher as required).
+ * #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+ * (or NPY_1_8_API_VERSION or higher as required).
  */
 /* This struct will be moved to a private header in a future release */
 typedef struct tagPyArrayObject_fields {
@@ -675,7 +687,8 @@ typedef struct tagPyArrayObject_fields {
  * To hide the implementation details, we only expose
  * the Python struct HEAD.
  */
-#if !(defined(NPY_NO_DEPRECATED_API) && (NPY_API_VERSION <= NPY_NO_DEPRECATED_API))
+#if !defined(NPY_NO_DEPRECATED_API) || \
+    (NPY_NO_DEPRECATED_API < NPY_1_7_API_VERSION)
 /*
  * Can't put this in npy_deprecated_api.h like the others.
  * PyArrayObject field access is deprecated as of NumPy 1.7.
@@ -753,9 +766,15 @@ typedef int (PyArray_FinalizeFunc)(PyArrayObject *, PyObject *);
 #define NPY_ARRAY_F_CONTIGUOUS    0x0002
 
 /*
- * Note: all 0-d arrays are C_CONTIGUOUS and F_CONTIGUOUS. An N-d
- * array that is C_CONTIGUOUS is also F_CONTIGUOUS if only
- * one axis has a dimension different from one (ie. a 1x3x1 array).
+ * Note: all 0-d arrays are C_CONTIGUOUS and F_CONTIGUOUS. If a
+ * 1-d array is C_CONTIGUOUS it is also F_CONTIGUOUS. Arrays with
+ * more then one dimension can be C_CONTIGUOUS and F_CONTIGUOUS
+ * at the same time if they have either zero or one element.
+ * If NPY_RELAXED_STRIDES_CHECKING is set, a higher dimensional
+ * array is always C_CONTIGUOUS and F_CONTIGUOUS if it has zero elements
+ * and the array is contiguous if ndarray.squeeze() is contiguous.
+ * I.e. dimensions for which `ndarray.shape[dimension] == 1` are
+ * ignored.
  */
 
 /*
@@ -915,6 +934,8 @@ typedef int (PyArray_FinalizeFunc)(PyArrayObject *, PyObject *);
 #define NPY_BEGIN_THREADS_DEF PyThreadState *_save=NULL;
 #define NPY_BEGIN_THREADS do {_save = PyEval_SaveThread();} while (0);
 #define NPY_END_THREADS   do {if (_save) PyEval_RestoreThread(_save);} while (0);
+#define NPY_BEGIN_THREADS_THRESHOLDED(loop_size) do { if (loop_size > 500) \
+                { _save = PyEval_SaveThread();} } while (0);
 
 #define NPY_BEGIN_THREADS_DESCR(dtype) \
         do {if (!(PyDataType_FLAGCHK(dtype, NPY_NEEDS_PYAPI))) \
@@ -1269,6 +1290,10 @@ typedef struct {
         npy_intp              bscoord[NPY_MAXDIMS];
 
         PyObject              *indexobj;               /* creating obj */
+        /*
+         * consec is first used to indicate wether fancy indices are
+         * consecutive and then denotes at which axis they are inserted
+         */
         int                   consec;
         char                  *dataptr;
 
@@ -1373,7 +1398,7 @@ PyArrayNeighborhoodIter_Next2D(PyArrayNeighborhoodIterObject* iter);
 #define PyArray_FORTRAN_IF(m) ((PyArray_CHKFLAGS(m, NPY_ARRAY_F_CONTIGUOUS) ? \
                                NPY_ARRAY_F_CONTIGUOUS : 0))
 
-#if (defined(NPY_NO_DEPRECATED_API) && (NPY_API_VERSION <= NPY_NO_DEPRECATED_API))
+#if (defined(NPY_NO_DEPRECATED_API) && (NPY_1_7_API_VERSION <= NPY_NO_DEPRECATED_API))
 /*
  * Changing access macros into functions, to allow for future hiding
  * of the internal memory layout. This later hiding will allow the 2.x series
@@ -1722,8 +1747,30 @@ typedef struct {
 typedef void (PyDataMem_EventHookFunc)(void *inp, void *outp, size_t size,
                                        void *user_data);
 
-#if !(defined(NPY_NO_DEPRECATED_API) && (NPY_API_VERSION <= NPY_NO_DEPRECATED_API))
-#include "npy_deprecated_api.h"
+/*
+ * Use the keyword NPY_DEPRECATED_INCLUDES to ensure that the header files
+ * npy_*_*_deprecated_api.h are only included from here and nowhere else.
+ */
+#ifdef NPY_DEPRECATED_INCLUDES
+#error "Do not use the reserved keyword NPY_DEPRECATED_INCLUDES."
 #endif
+#define NPY_DEPRECATED_INCLUDES
+#if !defined(NPY_NO_DEPRECATED_API) || \
+    (NPY_NO_DEPRECATED_API < NPY_1_7_API_VERSION)
+#include "npy_1_7_deprecated_api.h"
+#endif
+/*
+ * There is no file npy_1_8_deprecated_api.h since there are no additional
+ * deprecated API features in NumPy 1.8.
+ *
+ * Note to maintainers: insert code like the following in future NumPy
+ * versions.
+ *
+ * #if !defined(NPY_NO_DEPRECATED_API) || \
+ *     (NPY_NO_DEPRECATED_API < NPY_1_9_API_VERSION)
+ * #include "npy_1_9_deprecated_api.h"
+ * #endif
+ */
+#undef NPY_DEPRECATED_INCLUDES
 
 #endif /* NPY_ARRAYTYPES_H */

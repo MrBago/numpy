@@ -31,7 +31,7 @@ Functions
 - `mapparms` -- parameters of the linear map between domains.
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['RankWarning', 'PolyError', 'PolyDomainError', 'PolyBase',
            'as_series', 'trimseq', 'trimcoef', 'getdomain', 'mapdomain',
@@ -68,16 +68,6 @@ class PolyDomainError(PolyError) :
 
 class PolyBase(object) :
     pass
-
-#
-# We need the any function for python < 2.5
-#
-if sys.version_info[:2] < (2,5) :
-    def any(iterable) :
-        for element in iterable:
-            if element :
-                return True
-        return False
 
 #
 # Helper functions to convert inputs to 1-D arrays
@@ -138,7 +128,7 @@ def as_series(alist, trim=True) :
 
     Raises
     ------
-    ValueError :
+    ValueError
         Raised when `as_series` cannot convert its input to 1-d arrays, or at
         least one of the resulting arrays is empty.
 

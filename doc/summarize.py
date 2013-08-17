@@ -5,6 +5,7 @@ summarize.py
 Show a summary about which Numpy functions are documented and which are not.
 
 """
+from __future__ import division, absolute_import, print_function
 
 import os, glob, re, sys, inspect, optparse
 import collections
@@ -73,26 +74,26 @@ def main():
 
     # report
     in_sections = {}
-    for name, locations in documented.iteritems():
+    for name, locations in documented.items():
         for (filename, section, keyword, toctree) in locations:
             in_sections.setdefault((filename, section, keyword), []).append(name)
 
-    print "Documented"
-    print "==========\n"
+    print("Documented")
+    print("==========\n")
 
     last_filename = None
     for (filename, section, keyword), names in sorted(in_sections.items()):
         if filename != last_filename:
-            print "--- %s\n" % filename
+            print("--- %s\n" % filename)
         last_filename = filename
-        print " ** ", section
-        print format_in_columns(sorted(names), options.cols)
-        print "\n"
+        print(" ** ", section)
+        print(format_in_columns(sorted(names), options.cols))
+        print("\n")
 
-    print ""
-    print "Undocumented"
-    print "============\n"
-    print format_in_columns(sorted(undocumented.keys()), options.cols)
+    print("")
+    print("Undocumented")
+    print("============\n")
+    print(format_in_columns(sorted(undocumented.keys()), options.cols))
 
 def check_numpy():
     documented = get_documented(glob.glob(SOURCE_DIR + '/*.rst'))
@@ -148,8 +149,8 @@ def format_in_columns(lst, max_columns):
     Format a list containing strings to a string containing the items
     in columns.
     """
-    lst = map(str, lst)
-    col_len = max(map(len, lst)) + 2
+    lst = [str(_m) for _m in lst]
+    col_len = max([len(_m) for _m in lst]) + 2
     ncols = 80//col_len
     if ncols > max_columns:
         ncols = max_columns

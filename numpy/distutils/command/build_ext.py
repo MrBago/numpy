@@ -1,5 +1,7 @@
 """ Modified version of build_ext that handles fortran source files.
+
 """
+from __future__ import division, absolute_import, print_function
 
 import os
 import sys
@@ -295,8 +297,8 @@ class build_ext (old_build_ext):
         else: # in case ext.language is c++, for instance
             fcompiler = self._f90_compiler or self._f77_compiler
         if fcompiler is not None:
-            fcompiler.extra_f77_compile_args = ext.extra_f77_compile_args or []
-            fcompiler.extra_f90_compile_args = ext.extra_f90_compile_args or []
+            fcompiler.extra_f77_compile_args = (ext.extra_f77_compile_args or []) if hasattr(ext,'extra_f77_compile_args') else []
+            fcompiler.extra_f90_compile_args = (ext.extra_f90_compile_args or []) if hasattr(ext,'extra_f90_compile_args') else []
         cxx_compiler = self._cxx_compiler
 
         # check for the availability of required compilers

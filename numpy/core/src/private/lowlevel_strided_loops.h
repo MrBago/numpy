@@ -1,5 +1,7 @@
 #ifndef __LOWLEVEL_STRIDED_LOOPS_H
 #define __LOWLEVEL_STRIDED_LOOPS_H
+#include "common.h"
+#include <npy_config.h>
 
 /*
  * NOTE: This API should remain private for the time being, to allow
@@ -256,6 +258,7 @@ PyArray_CastRawArrays(npy_intp count,
  * 'stransfer' with the provided dst_stride/src_stride and
  * dst_strides[0]/src_strides[0], so the caller can use those values to
  * specialize the function.
+ * Note that even if ndim == 0, everything needs to be set as if ndim == 1.
  *
  * The return value is the number of elements it couldn't copy.  A return value
  * of 0 means all elements were copied, a larger value means the end of
@@ -394,6 +397,119 @@ PyArray_PrepareThreeRawArrayIter(int ndim, npy_intp *shape,
                             char **out_dataA, npy_intp *out_stridesA,
                             char **out_dataB, npy_intp *out_stridesB,
                             char **out_dataC, npy_intp *out_stridesC);
+
+/*
+ * Return number of elements that must be peeled from
+ * the start of 'addr' with 'nvals' elements of size 'esize'
+ * in order to reach 'alignment'.
+ * alignment must be a power of two.
+ * see npy_blocked_end for an example
+ */
+static NPY_INLINE npy_uintp
+npy_aligned_block_offset(const void * addr, const npy_uintp esize,
+                         const npy_uintp alignment, const npy_uintp nvals)
+{
+    const npy_uintp offset = (npy_uintp)addr & (alignment - 1);
+    npy_uintp peel = offset ? (alignment - offset) / esize : 0;
+    peel = nvals < peel ? nvals : peel;
+    return peel;
+}
+
+/*
+ * Return upper loop bound for an array of 'nvals' elements
+ * of size 'esize' peeled by 'offset' elements and blocking to
+ * a vector size of 'vsz' in bytes
+ *
+ * example usage:
+ * npy_intp i;
+ * double v[101];
+ * npy_intp esize = sizeof(v[0]);
+ * npy_intp peel = npy_aligned_block_offset(v, esize, 16, n);
+ * // peel to alignment 16
+ * for (i = 0; i < peel; i++)
+ *   <scalar-op>
+ * // simd vectorized operation
+ * for (; i < npy_blocked_end(peel, esize, 16, n); i += 16 / esize)
+ *   <blocked-op>
+ * // handle scalar rest
+ * for(; i < n; i++)
+ *   <scalar-op>
+ */
+static NPY_INLINE npy_uintp
+npy_blocked_end(const npy_uintp offset, const npy_uintp esize,
+                const npy_uintp vsz, const npy_uintp nvals)
+{
+    return nvals - offset - (nvals - offset) % (vsz / esize);
+}
+
+
+/* byte swapping functions */
+static NPY_INLINE npy_uint16
+npy_bswap2(npy_uint16 x)
+{
+    return ((x & 0xffu) << 8) | (x >> 8);
+}
+
+/*
+ * treat as int16 and byteswap unaligned memory,
+ * some cpus don't support unaligned access
+ */
+static NPY_INLINE void
+npy_bswap2_unaligned(char * x)
+{
+    char a = x[0];
+    x[0] = x[1];
+    x[1] = a;
+}
+
+static NPY_INLINE npy_uint32
+npy_bswap4(npy_uint32 x)
+{
+#ifdef HAVE___BUILTIN_BSWAP32
+    return __builtin_bswap32(x);
+#else
+    return ((x & 0xffu) << 24) | ((x & 0xff00u) << 8) |
+           ((x & 0xff0000u) >> 8) | (x >> 24);
+#endif
+}
+
+static NPY_INLINE void
+npy_bswap4_unaligned(char * x)
+{
+    char a = x[0];
+    x[0] = x[3];
+    x[3] = a;
+    a = x[1];
+    x[1] = x[2];
+    x[2] = a;
+}
+
+static NPY_INLINE npy_uint64
+npy_bswap8(npy_uint64 x)
+{
+#ifdef HAVE___BUILTIN_BSWAP64
+    return __builtin_bswap64(x);
+#else
+    return ((x & 0xffULL) << 56) |
+           ((x & 0xff00ULL) << 40) |
+           ((x & 0xff0000ULL) << 24) |
+           ((x & 0xff000000ULL) << 8) |
+           ((x & 0xff00000000ULL) >> 8) |
+           ((x & 0xff0000000000ULL) >> 24) |
+           ((x & 0xff000000000000ULL) >> 40) |
+           ( x >> 56);
+#endif
+}
+
+static NPY_INLINE void
+npy_bswap8_unaligned(char * x)
+{
+    char a = x[0]; x[0] = x[7]; x[7] = a;
+    a = x[1]; x[1] = x[6]; x[6] = a;
+    a = x[2]; x[2] = x[5]; x[5] = a;
+    a = x[3]; x[3] = x[4]; x[4] = a;
+}
+
 
 /* Start raw iteration */
 #define NPY_RAW_ITER_START(idim, ndim, coord, shape) \

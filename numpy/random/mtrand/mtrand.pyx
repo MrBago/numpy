@@ -124,6 +124,7 @@ cdef extern from "initarray.h":
 import_array()
 
 import numpy as np
+import operator
 
 cdef object cont0_array(rk_state *state, rk_cont0 func, object size):
     cdef double *array_data
@@ -537,7 +538,7 @@ cdef class RandomState:
 
     Parameters
     ----------
-    seed : int or array_like, optional
+    seed : {None, int, array_like}, optional
         Random seed initializing the pseudo-random number generator.
         Can be an integer, an array (or other sequence) of integers of
         any length, or ``None`` (the default).
@@ -994,21 +995,24 @@ cdef class RandomState:
         """
 
         # Format and Verify input
-        if isinstance(a, int):
-            if a > 0:
-                pop_size = a #population size
-            else:
+        a = np.array(a, copy=False)
+        if a.ndim == 0:
+            try:
+                # __index__ must return an integer by python rules.
+                pop_size = operator.index(a.item())
+            except TypeError:
+                raise ValueError("a must be 1-dimensional or an integer")
+            if pop_size <= 0:
                 raise ValueError("a must be greater than 0")
+        elif a.ndim != 1:
+            raise ValueError("a must be 1-dimensional")
         else:
-            a = np.array(a, ndmin=1, copy=0)
-            if a.ndim != 1:
-                raise ValueError("a must be 1-dimensional")
-            pop_size = a.size
+            pop_size = a.shape[0]
             if pop_size is 0:
                 raise ValueError("a must be non-empty")
 
         if None != p:
-            p = np.array(p, dtype=np.double, ndmin=1, copy=0)
+            p = np.array(p, dtype=np.double, ndmin=1, copy=False)
             if p.ndim != 1:
                 raise ValueError("p must be 1-dimensional")
             if p.size != pop_size:
@@ -1019,7 +1023,10 @@ cdef class RandomState:
                 raise ValueError("probabilities do not sum to 1")
 
         shape = size
-        size = 1 if shape is None else np.prod(shape, dtype=np.intp)
+        if shape is not None:
+            size = np.prod(shape, dtype=np.intp)
+        else:
+            size = 1
 
         # Actual sampling
         if replace:
@@ -1060,18 +1067,27 @@ cdef class RandomState:
                 idx = self.permutation(pop_size)[:size]
                 if shape is not None:
                     idx.shape = shape
+
         if shape is None and isinstance(idx, np.ndarray):
             # In most cases a scalar will have been made an array
             idx = idx.item(0)
+
         #Use samples as indices for a if a is array-like
-        if isinstance(a, int):
+        if a.ndim == 0:
             return idx
-        res = a[idx]
-        # Note when introducing an axis argument a copy should be ensured.
-        if res.ndim == 0 and shape is not None:
-            # the result here is not a scalar but an array.
-            return np.array(res)
-        return res
+
+        if shape is not None and idx.ndim == 0:
+            # If size == () then the user requested a 0-d array as opposed to
+            # a scalar object when size is None. However a[idx] is always a
+            # scalar and not an array. So this makes sure the result is an
+            # array, taking into account that np.array(item) may not work
+            # for object arrays.
+            res = np.empty((), dtype=a.dtype)
+            res[()] = a[idx]
+            return res
+
+        return a[idx]
+
 
     def uniform(self, low=0.0, high=1.0, size=None):
         """
@@ -1823,7 +1839,6 @@ cdef class RandomState:
 
         Notes
         -----
-
         The F statistic is used to compare in-group variances to between-group
         variances. Calculating the distribution depends on the sampling, and
         so it is a function of the respective degrees of freedom in the
@@ -3398,13 +3413,13 @@ cdef class RandomState:
 
         Samples are drawn from a Binomial distribution with specified
         parameters, n trials and p probability of success where
-        n an integer > 0 and p is in the interval [0,1]. (n may be
+        n an integer >= 0 and p is in the interval [0,1]. (n may be
         input as a float, but it is truncated to an integer in use)
 
         Parameters
         ----------
         n : float (but truncated to an integer)
-                parameter, > 0.
+                parameter, >= 0.
         p : float
                 parameter, >= 0 and <=1.
         size : {tuple, int}
@@ -3478,8 +3493,8 @@ cdef class RandomState:
         fp = PyFloat_AsDouble(p)
         ln = PyInt_AsLong(n)
         if not PyErr_Occurred():
-            if ln <= 0:
-                raise ValueError("n <= 0")
+            if ln < 0:
+                raise ValueError("n < 0")
             if fp < 0:
                 raise ValueError("p < 0")
             elif fp > 1:
@@ -3490,8 +3505,8 @@ cdef class RandomState:
 
         on = <ndarray>PyArray_FROM_OTF(n, NPY_LONG, NPY_ARRAY_ALIGNED)
         op = <ndarray>PyArray_FROM_OTF(p, NPY_DOUBLE, NPY_ARRAY_ALIGNED)
-        if np.any(np.less_equal(n, 0)):
-            raise ValueError("n <= 0")
+        if np.any(np.less(n, 0)):
+            raise ValueError("n < 0")
         if np.any(np.less(p, 0)):
             raise ValueError("p < 0")
         if np.any(np.greater(p, 1)):
@@ -3831,20 +3846,21 @@ cdef class RandomState:
 
         Parameters
         ----------
-        ngood : float (but truncated to an integer)
-                parameter, > 0.
-        nbad  : float
-                parameter, >= 0.
-        nsample  : float
-                   parameter, > 0 and <= ngood+nbad
-        size : {tuple, int}
+        ngood : int or array_like
+            Number of ways to make a good selection.  Must be nonnegative.
+        nbad : int or array_like
+            Number of ways to make a bad selection.  Must be nonnegative.
+        nsample : int or array_like
+            Number of items sampled.  Must be at least 1 and at most
+            ``ngood + nbad``.
+        size : int or tuple of int
             Output shape.  If the given shape is, e.g., ``(m, n, k)``, then
             ``m * n * k`` samples are drawn.
 
         Returns
         -------
-        samples : {ndarray, scalar}
-                  where the values are all integers in  [0, n].
+        samples : ndarray or scalar
+            The values are all integers in  [0, n].
 
         See Also
         --------
@@ -3909,27 +3925,26 @@ cdef class RandomState:
         lnbad = PyInt_AsLong(nbad)
         lnsample = PyInt_AsLong(nsample)
         if not PyErr_Occurred():
-            if ngood < 1:
-                raise ValueError("ngood < 1")
-            if nbad < 1:
-                raise ValueError("nbad < 1")
-            if nsample < 1:
+            if lngood < 0:
+                raise ValueError("ngood < 0")
+            if lnbad < 0:
+                raise ValueError("nbad < 0")
+            if lnsample < 1:
                 raise ValueError("nsample < 1")
-            if ngood + nbad < nsample:
+            if lngood + lnbad < lnsample:
                 raise ValueError("ngood + nbad < nsample")
             return discnmN_array_sc(self.internal_state, rk_hypergeometric, size,
                                     lngood, lnbad, lnsample)
-
 
         PyErr_Clear()
 
         ongood = <ndarray>PyArray_FROM_OTF(ngood, NPY_LONG, NPY_ARRAY_ALIGNED)
         onbad = <ndarray>PyArray_FROM_OTF(nbad, NPY_LONG, NPY_ARRAY_ALIGNED)
         onsample = <ndarray>PyArray_FROM_OTF(nsample, NPY_LONG, NPY_ARRAY_ALIGNED)
-        if np.any(np.less(ongood, 1)):
-            raise ValueError("ngood < 1")
-        if np.any(np.less(onbad, 1)):
-            raise ValueError("nbad < 1")
+        if np.any(np.less(ongood, 0)):
+            raise ValueError("ngood < 0")
+        if np.any(np.less(onbad, 0)):
+            raise ValueError("nbad < 0")
         if np.any(np.less(onsample, 1)):
             raise ValueError("nsample < 1")
         if np.any(np.less(np.add(ongood, onbad),onsample)):
@@ -4052,7 +4067,7 @@ cdef class RandomState:
         cov : 2-D array_like, of shape (N, N)
             Covariance matrix of the distribution.  Must be symmetric and
             positive semi-definite for "physically meaningful" results.
-        size : tuple of ints, optional
+        size : int or tuple of ints, optional
             Given a shape of, for example, ``(m,n,k)``, ``m*n*k`` samples are
             generated, and packed in an `m`-by-`n`-by-`k` arrangement.  Because
             each sample is `N`-dimensional, the output shape is ``(m,n,k,N)``.
@@ -4137,7 +4152,7 @@ cdef class RandomState:
         if mean.shape[0] != cov.shape[0]:
                raise ValueError("mean and cov must have same length")
         # Compute shape of output
-        if isinstance(shape, int):
+        if isinstance(shape, (int, long, np.integer)):
             shape = [shape]
         final_shape = list(shape[:])
         final_shape.append(mean.shape[0])

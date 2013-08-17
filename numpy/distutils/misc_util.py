@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import os
 import re
 import sys
@@ -165,7 +167,7 @@ def get_mathlibs(path=None):
     fid = open(config_file)
     mathlibs = []
     s = '#define MATHLIB'
-    for line in fid.readlines():
+    for line in fid:
         if line.startswith(s):
             value = line[len(s):].strip()
             if value:
@@ -218,8 +220,8 @@ def _fix_paths(paths,local_path,include_non_existing):
                 else:
                     if include_non_existing:
                         new_paths.append(n)
-                    print('could not resolve pattern in %r: %r' \
-                              % (local_path,n))
+                    print('could not resolve pattern in %r: %r' %
+                            (local_path,n))
             else:
                 n2 = njoin(local_path,n)
                 if os.path.exists(n2):
@@ -230,8 +232,8 @@ def _fix_paths(paths,local_path,include_non_existing):
                     elif include_non_existing:
                         new_paths.append(n)
                     if not os.path.exists(n):
-                        print('non-existing path in %r: %r' \
-                              % (local_path,n))
+                        print('non-existing path in %r: %r' %
+                                (local_path,n))
 
         elif is_sequence(n):
             new_paths.extend(_fix_paths(n,local_path,include_non_existing))
@@ -365,17 +367,6 @@ def msvc_runtime_library():
         lib = None
     return lib
 
-def msvc_on_amd64():
-    if not (sys.platform=='win32' or os.name=='nt'):
-        return
-    if get_build_architecture() != 'AMD64':
-        return
-    if 'DISTUTILS_USE_SDK' in os.environ:
-        return
-    # try to avoid _MSVCCompiler__root attribute error
-    print('Forcing DISTUTILS_USE_SDK=1')
-    os.environ['DISTUTILS_USE_SDK']='1'
-    return
 
 #########################
 
@@ -392,8 +383,7 @@ def _get_f90_modules(source):
         return []
     modules = []
     f = open(source,'r')
-    f_readlines = getattr(f,'xreadlines',f.readlines)
-    for line in f_readlines():
+    for line in f:
         m = f90_module_name_match(line)
         if m:
             name = m.group('name')
@@ -555,7 +545,7 @@ def general_source_directories_files(top_path):
 def get_ext_source_files(ext):
     # Get sources and any include files in the same directory.
     filenames = []
-    sources = filter(is_string, ext.sources)
+    sources = [_m for _m in ext.sources if is_string(_m)]
     filenames.extend(sources)
     filenames.extend(get_dependencies(sources))
     for d in ext.depends:
@@ -566,13 +556,13 @@ def get_ext_source_files(ext):
     return filenames
 
 def get_script_files(scripts):
-    scripts = filter(is_string, scripts)
+    scripts = [_m for _m in scripts if is_string(_m)]
     return scripts
 
 def get_lib_source_files(lib):
     filenames = []
     sources = lib[1].get('sources',[])
-    sources = filter(is_string, sources)
+    sources = [_m for _m in sources if is_string(_m)]
     filenames.extend(sources)
     filenames.extend(get_dependencies(sources))
     depends = lib[1].get('depends',[])
@@ -604,11 +594,29 @@ def get_shared_lib_extension(is_python_ext=False):
     Linux, but not on OS X.
 
     """
-    so_ext = distutils.sysconfig.get_config_var('SO') or ''
-    # fix long extension for Python >=3.2, see PEP 3149.
-    if (not is_python_ext) and 'SOABI' in distutils.sysconfig.get_config_vars():
-        # Does nothing unless SOABI config var exists
-        so_ext = so_ext.replace('.' + distutils.sysconfig.get_config_var('SOABI'), '', 1)
+    confvars = distutils.sysconfig.get_config_vars()
+    # SO is deprecated in 3.3.1, use EXT_SUFFIX instead
+    so_ext = confvars.get('EXT_SUFFIX', None)
+    if so_ext is None:
+        so_ext = confvars.get('SO', '')
+
+    if not is_python_ext:
+        # hardcode known values, config vars (including SHLIB_SUFFIX) are
+        # unreliable (see #3182)
+        # darwin, windows and debug linux are wrong in 3.3.1 and older
+        if (sys.platform.startswith('linux') or
+            sys.platform.startswith('gnukfreebsd')):
+            so_ext = '.so'
+        elif sys.platform.startswith('darwin'):
+            so_ext = '.dylib'
+        elif sys.platform.startswith('win'):
+            so_ext = '.dll'
+        else:
+            # fall back to config vars for unknown platforms
+            # fix long extension for Python >=3.2, see PEP 3149.
+            if 'SOABI' in confvars:
+                # Does nothing unless SOABI config var exists
+                so_ext = so_ext.replace('.' + confvars.get('SOABI'), '', 1)
 
     return so_ext
 
@@ -626,7 +634,7 @@ def get_data_files(data):
             if os.path.isfile(s):
                 filenames.append(s)
             else:
-                print('Not existing data file:',s)
+                print('Not existing data file:', s)
         else:
             raise TypeError(repr(s))
     return filenames
@@ -652,7 +660,7 @@ class Configuration(object):
 
     _list_keys = ['packages', 'ext_modules', 'data_files', 'include_dirs',
                   'libraries', 'headers', 'scripts', 'py_modules',
-                  'installed_libraries']
+                  'installed_libraries', 'define_macros']
     _dict_keys = ['package_dir', 'installed_pkg_config']
     _extra_keys = ['name', 'version']
 
@@ -808,7 +816,7 @@ class Configuration(object):
                                  caller_level = 1):
         l = subpackage_name.split('.')
         subpackage_path = njoin([self.local_path]+l)
-        dirs = filter(os.path.isdir,glob.glob(subpackage_path))
+        dirs = [_m for _m in glob.glob(subpackage_path) if os.path.isdir(_m)]
         config_list = []
         for d in dirs:
             if not os.path.isfile(njoin(d,'__init__.py')):
@@ -877,14 +885,14 @@ class Configuration(object):
 
         Parameters
         ----------
-        subpackage_name: str,None
+        subpackage_name : str or None
             Name of the subpackage to get the configuration. '*' in
             subpackage_name is handled as a wildcard.
-        subpackage_path: str
+        subpackage_path : str
             If None, then the path is assumed to be the local path plus the
             subpackage_name. If a setup.py file is not found in the
             subpackage_path, then a default configuration is used.
-        parent_name: str
+        parent_name : str
             Parent name.
         """
         if subpackage_name is None:
@@ -940,13 +948,13 @@ class Configuration(object):
 
         Parameters
         ----------
-        subpackage_name: str
+        subpackage_name : str
             name of the subpackage
-        subpackage_path: str
+        subpackage_path : str
             if given, the subpackage path such as the subpackage is in
             subpackage_path / subpackage_name. If None,the subpackage is
             assumed to be located in the local path / subpackage_name.
-        standalone: bool
+        standalone : bool
         """
 
         if standalone:
@@ -984,10 +992,10 @@ class Configuration(object):
 
         Parameters
         ----------
-        data_path: seq,str
+        data_path : seq or str
             Argument can be either
 
-                * 2-sequence (<datadir suffix>,<path to data directory>)
+                * 2-sequence (<datadir suffix>, <path to data directory>)
                 * path to data directory where python datadir suffix defaults
                   to package dir.
 
@@ -1046,14 +1054,14 @@ class Configuration(object):
                 pattern_list = allpath(d).split(os.sep)
                 pattern_list.reverse()
                 # /a/*//b/ -> /a/*/b
-                rl = range(len(pattern_list)-1); rl.reverse()
+                rl = list(range(len(pattern_list)-1)); rl.reverse()
                 for i in rl:
                     if not pattern_list[i]:
                         del pattern_list[i]
                 #
                 for path in paths:
                     if not os.path.isdir(path):
-                        print('Not a directory, skipping',path)
+                        print('Not a directory, skipping', path)
                         continue
                     rpath = rel_path(path, self.local_path)
                     path_list = rpath.split(os.sep)
@@ -1106,7 +1114,7 @@ class Configuration(object):
 
         Parameters
         ----------
-        files: sequence
+        files : sequence
             Argument(s) can be either
 
                 * 2-sequence (<datadir prefix>,<path to data file(s)>)
@@ -1254,6 +1262,22 @@ class Configuration(object):
 
     ### XXX Implement add_py_modules
 
+    def add_define_macros(self, macros):
+        """Add define macros to configuration
+
+        Add the given sequence of macro name and value duples to the beginning
+        of the define_macros list This list will be visible to all extension
+        modules of the current package.
+        """
+        dist = self.get_distribution()
+        if dist is not None:
+            if not hasattr(dist, 'define_macros'):
+                dist.define_macros = []
+            dist.define_macros.extend(macros)
+        else:
+            self.define_macros.extend(macros)
+
+
     def add_include_dirs(self,*paths):
         """Add paths to configuration include directories.
 
@@ -1285,7 +1309,7 @@ class Configuration(object):
 
         Parameters
         ----------
-        files: str, seq
+        files : str or seq
             Argument(s) can be either:
 
                 * 2-sequence (<includedir suffix>,<path to header file(s)>)
@@ -1340,9 +1364,9 @@ class Configuration(object):
 
         Parameters
         ----------
-        name: str
+        name : str
             name of the extension
-        sources: seq
+        sources : seq
             list of the sources. The list of sources may contain functions
             (called source generators) which must take an extension instance
             and a build directory as inputs and return a source file or list of
@@ -1350,28 +1374,28 @@ class Configuration(object):
             generated. If the Extension instance has no sources after
             processing all source generators, then no extension module is
             built.
-        include_dirs:
-        define_macros:
-        undef_macros:
-        library_dirs:
-        libraries:
-        runtime_library_dirs:
-        extra_objects:
-        extra_compile_args:
-        extra_link_args:
-        extra_f77_compile_args:
-        extra_f90_compile_args:
-        export_symbols:
-        swig_opts:
-        depends:
+        include_dirs :
+        define_macros :
+        undef_macros :
+        library_dirs :
+        libraries :
+        runtime_library_dirs :
+        extra_objects :
+        extra_compile_args :
+        extra_link_args :
+        extra_f77_compile_args :
+        extra_f90_compile_args :
+        export_symbols :
+        swig_opts :
+        depends :
             The depends list contains paths to files or directories that the
             sources of the extension module depend on. If any path in the
             depends list is newer than the extension module, then the module
             will be rebuilt.
-        language:
-        f2py_options:
-        module_dirs:
-        extra_info: dict,list
+        language :
+        f2py_options :
+        module_dirs :
+        extra_info : dict or list
             dict or list of dict of keywords to be appended to keywords.
 
         Notes
@@ -1421,6 +1445,8 @@ class Configuration(object):
             libnames.append(libname)
 
         ext_args['libraries'] = libnames + ext_args['libraries']
+        ext_args['define_macros'] = \
+            self.define_macros + ext_args.get('define_macros', [])
 
         from numpy.distutils.core import Extension
         ext = Extension(**ext_args)
@@ -1989,7 +2015,7 @@ class Configuration(object):
         Return information (from system_info.get_info) for all of the names in
         the argument list in a single dictionary.
         """
-        from system_info import get_info, dict_append
+        from .system_info import get_info, dict_append
         info_dict = {}
         for a in names:
             dict_append(info_dict,**get_info(a))
@@ -2124,9 +2150,13 @@ def get_info(pkgname, dirs=None):
     return info
 
 def is_bootstrapping():
-    import __builtin__
+    if sys.version_info[0] >= 3:
+        import builtins
+    else:
+        import __builtin__ as builtins
+
     try:
-        __builtin__.__NUMPY_SETUP__
+        builtins.__NUMPY_SETUP__
         return True
     except AttributeError:
         return False

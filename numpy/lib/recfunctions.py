@@ -4,8 +4,8 @@ Collection of utilities to manipulate structured arrays.
 Most of these functions were initially implemented by John Hunter for matplotlib.
 They have been rewritten and extended for convenience.
 
-
 """
+from __future__ import division, absolute_import, print_function
 
 import sys
 import itertools
@@ -15,6 +15,10 @@ from numpy import ndarray, recarray
 from numpy.ma import MaskedArray
 from numpy.ma.mrecords import MaskedRecords
 from numpy.lib._iotools import _is_string_like
+from numpy.compat import basestring
+
+if sys.version_info[0] < 3:
+    from future_builtins import zip
 
 _check_fill_value = np.ma.core._check_fill_value
 
@@ -287,7 +291,7 @@ def izip_records(seqarrays, fill_value=None, flatten=True):
         zipfunc = _izip_fields
     #
     try:
-        for tup in itertools.izip(*iters):
+        for tup in zip(*iters):
             yield tuple(zipfunc(tup))
     except IndexError:
         pass
@@ -317,7 +321,7 @@ def _fix_defaults(output, defaults=None):
     """
     names = output.dtype.names
     (data, mask, fill_value) = (output.data, output.mask, output.fill_value)
-    for (k, v) in (defaults or {}).iteritems():
+    for (k, v) in (defaults or {}).items():
         if k in names:
             fill_value[k] = v
             data[k][mask[k]] = v
@@ -401,7 +405,7 @@ def merge_arrays(seqarrays,
             seqarrays = (seqarrays,)
     else:
         # Make sure we have arrays in the input sequence
-        seqarrays = map(np.asanyarray, seqarrays)
+        seqarrays = [np.asanyarray(_m) for _m in seqarrays]
     # Find the sizes of the inputs and their maximum
     sizes = tuple(a.size for a in seqarrays)
     maxlength = max(sizes)
@@ -412,7 +416,7 @@ def merge_arrays(seqarrays,
     seqmask = []
     # If we expect some kind of MaskedArray, make a special loop.
     if usemask:
-        for (a, n) in itertools.izip(seqarrays, sizes):
+        for (a, n) in zip(seqarrays, sizes):
             nbmissing = (maxlength - n)
             # Get the data and mask
             data = a.ravel().__array__()
@@ -441,7 +445,7 @@ def merge_arrays(seqarrays,
             output = output.view(MaskedRecords)
     else:
         # Same as before, without the mask we don't need...
-        for (a, n) in itertools.izip(seqarrays, sizes):
+        for (a, n) in zip(seqarrays, sizes):
             nbmissing = (maxlength - n)
             data = a.ravel().__array__()
             if nbmissing:

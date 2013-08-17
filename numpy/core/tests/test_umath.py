@@ -1,7 +1,10 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
 import platform
 
 from numpy.testing import *
+from numpy.testing.utils import gen_alignment_data
 import numpy.core.umath as ncu
 import numpy as np
 
@@ -57,8 +60,7 @@ class TestDivision(TestCase):
         assert_almost_equal(y/x, [1, 1], err_msg=msg)
 
     def test_zero_division_complex(self):
-        err = np.seterr(invalid="ignore", divide="ignore")
-        try:
+        with np.errstate(invalid="ignore", divide="ignore"):
             x = np.array([0.0], dtype=np.complex128)
             y = 1.0/x
             assert_(np.isinf(y)[0])
@@ -70,8 +72,6 @@ class TestDivision(TestCase):
             assert_(np.isinf(y)[0])
             y = 0.0/x
             assert_(np.isnan(y)[0])
-        finally:
-            np.seterr(**err)
 
     def test_floor_division_complex(self):
         # check that implementation is correct
@@ -98,6 +98,21 @@ class TestPower(TestCase):
         assert_almost_equal(x**(-1), [1., 0.5, 1./3])
         assert_almost_equal(x**(0.5), [1., ncu.sqrt(2), ncu.sqrt(3)])
 
+        for out, inp, msg in gen_alignment_data(dtype=np.float32,
+                                                type='unary'):
+            exp = [ncu.sqrt(i) for i in inp]
+            assert_almost_equal(inp**(0.5), exp, err_msg=msg)
+            np.sqrt(inp, out=out)
+            assert_equal(out, exp, err_msg=msg)
+
+        for out, inp, msg in gen_alignment_data(dtype=np.float64,
+                                                type='unary'):
+            exp = [ncu.sqrt(i) for i in inp]
+            assert_almost_equal(inp**(0.5), exp, err_msg=msg)
+            np.sqrt(inp, out=out)
+            assert_equal(out, exp, err_msg=msg)
+
+
     def test_power_complex(self):
         x = np.array([1+2j, 2+3j, 3+4j])
         assert_equal(x**0, [1., 1., 1.])
@@ -122,14 +137,11 @@ class TestPower(TestCase):
             assert_array_equal(x.imag, y.imag)
 
         for z in [complex(0, np.inf), complex(1, np.inf)]:
-            err = np.seterr(invalid="ignore")
             z = np.array([z], dtype=np.complex_)
-            try:
+            with np.errstate(invalid="ignore"):
                 assert_complex_equal(z**1, z)
                 assert_complex_equal(z**2, z*z)
                 assert_complex_equal(z**3, z*z*z)
-            finally:
-                np.seterr(**err)
 
     def test_power_zero(self):
         # ticket #1271
@@ -156,9 +168,9 @@ class TestPower(TestCase):
             assert_complex_equal(np.power(zero, -p), cnan)
         assert_complex_equal(np.power(zero, -1+0.2j), cnan)
 
-        def test_fast_power(self):
-            x=np.array([1,2,3], np.int16)
-            assert (x**2.00001).dtype is (x**2.0).dtype
+    def test_fast_power(self):
+        x = np.array([1,2,3], np.int16)
+        assert_((x**2.00001).dtype is (x**2.0).dtype)
 
 class TestLog2(TestCase):
     def test_log2_values(self) :
@@ -203,19 +215,16 @@ class TestLogAddExp2(_FilterInvalids):
             assert_almost_equal(np.logaddexp2(logxf, logyf), logzf)
 
     def test_inf(self) :
-        err = np.seterr(invalid='ignore')
         inf = np.inf
         x = [inf, -inf,  inf, -inf, inf, 1,  -inf,  1]
         y = [inf,  inf, -inf, -inf, 1,   inf, 1,   -inf]
         z = [inf,  inf,  inf, -inf, inf, inf, 1,    1]
-        try:
+        with np.errstate(invalid='ignore'):
             for dt in ['f','d','g'] :
                 logxf = np.array(x, dtype=dt)
                 logyf = np.array(y, dtype=dt)
                 logzf = np.array(z, dtype=dt)
                 assert_equal(np.logaddexp2(logxf, logyf), logzf)
-        finally:
-            np.seterr(**err)
 
     def test_nan(self):
         assert_(np.isnan(np.logaddexp2(np.nan, np.inf)))
@@ -269,19 +278,16 @@ class TestLogAddExp(_FilterInvalids):
             assert_almost_equal(np.logaddexp(logxf, logyf), logzf)
 
     def test_inf(self) :
-        err = np.seterr(invalid='ignore')
         inf = np.inf
         x = [inf, -inf,  inf, -inf, inf, 1,  -inf,  1]
         y = [inf,  inf, -inf, -inf, 1,   inf, 1,   -inf]
         z = [inf,  inf,  inf, -inf, inf, inf, 1,    1]
-        try:
+        with np.errstate(invalid='ignore'):
             for dt in ['f','d','g'] :
                 logxf = np.array(x, dtype=dt)
                 logyf = np.array(y, dtype=dt)
                 logzf = np.array(z, dtype=dt)
                 assert_equal(np.logaddexp(logxf, logyf), logzf)
-        finally:
-            np.seterr(**err)
 
     def test_nan(self):
         assert_(np.isnan(np.logaddexp(np.nan, np.inf)))
@@ -310,19 +316,15 @@ class TestHypot(TestCase, object):
 
 
 def assert_hypot_isnan(x, y):
-    err = np.seterr(invalid='ignore')
-    try:
-        assert_(np.isnan(ncu.hypot(x, y)), "hypot(%s, %s) is %s, not nan" % (x, y, ncu.hypot(x, y)))
-    finally:
-        np.seterr(**err)
+    with np.errstate(invalid='ignore'):
+        assert_(np.isnan(ncu.hypot(x, y)),
+                "hypot(%s, %s) is %s, not nan" % (x, y, ncu.hypot(x, y)))
 
 
 def assert_hypot_isinf(x, y):
-    err = np.seterr(invalid='ignore')
-    try:
-        assert_(np.isinf(ncu.hypot(x, y)), "hypot(%s, %s) is %s, not inf" % (x, y, ncu.hypot(x, y)))
-    finally:
-        np.seterr(**err)
+    with np.errstate(invalid='ignore'):
+        assert_(np.isinf(ncu.hypot(x, y)),
+                "hypot(%s, %s) is %s, not inf" % (x, y, ncu.hypot(x, y)))
 
 
 class TestHypotSpecialValues(TestCase):
@@ -330,7 +332,7 @@ class TestHypotSpecialValues(TestCase):
         assert_hypot_isnan(np.nan, np.nan)
         assert_hypot_isnan(np.nan, 1)
 
-    def test_nan_outputs(self):
+    def test_nan_outputs2(self):
         assert_hypot_isinf(np.nan, np.inf)
         assert_hypot_isinf(np.inf, np.nan)
         assert_hypot_isinf(np.inf, 0)
@@ -445,19 +447,13 @@ class TestLdexp(TestCase):
         self._check_ldexp('i')
         self._check_ldexp('l')
 
-    @dec.knownfailureif(sys.platform == 'win32' and sys.version_info < (2, 6),
-                        "python.org < 2.6 binaries have broken ldexp in the "
-                        "C runtime")
     def test_ldexp_overflow(self):
         # silence warning emitted on overflow
-        err = np.seterr(over="ignore")
-        try:
+        with np.errstate(over="ignore"):
             imax = np.iinfo(np.dtype('l')).max
             imin = np.iinfo(np.dtype('l')).min
             assert_equal(ncu.ldexp(2., imax), np.inf)
             assert_equal(ncu.ldexp(2., imin), 0)
-        finally:
-            np.seterr(**err)
 
 
 class TestMaximum(_FilterInvalids):
@@ -661,15 +657,57 @@ class TestSign(TestCase):
         out = np.zeros(a.shape)
         tgt = np.array([1., -1., np.nan, 0.0, 1.0, -1.0])
 
-        olderr = np.seterr(invalid='ignore')
-        try:
+        with np.errstate(invalid='ignore'):
             res = ncu.sign(a)
             assert_equal(res, tgt)
             res = ncu.sign(a, out)
             assert_equal(res, tgt)
             assert_equal(out, tgt)
-        finally:
-            np.seterr(**olderr)
+
+
+class TestMinMax(TestCase):
+    def test_minmax_blocked(self):
+        "simd tests on max/min"
+        for dt in [np.float32, np.float64]:
+            for out, inp, msg in gen_alignment_data(dtype=dt, type='unary',
+                                                    max_size=17):
+                for i in range(inp.size):
+                    inp[:] = np.arange(inp.size, dtype=dt)
+                    inp[i] = np.nan
+                    self.assertTrue(np.isnan(inp.max()),
+                                    msg=repr(inp) + '\n' + msg)
+                    self.assertTrue(np.isnan(inp.min()),
+                                    msg=repr(inp) + '\n' + msg)
+
+                    inp[i] = 1e10
+                    assert_equal(inp.max(), 1e10, err_msg=msg)
+                    inp[i] = -1e10
+                    assert_equal(inp.min(), -1e10, err_msg=msg)
+
+
+
+class TestAbsolute(TestCase):
+    def test_abs_blocked(self):
+        "simd tests on abs"
+        for dt in [np.float32, np.float64]:
+            for out, inp, msg in gen_alignment_data(dtype=dt, type='unary',
+                                                    max_size=17):
+                tgt = [ncu.absolute(i) for i in inp]
+                np.absolute(inp, out=out)
+                assert_equal(out, tgt, err_msg=msg)
+                self.assertTrue((out >= 0).all())
+
+                # will throw invalid flag depending on compiler optimizations
+                with np.errstate(invalid='ignore'):
+                    for v in [np.nan, -np.inf, np.inf]:
+                        for i in range(inp.size):
+                            d = np.arange(inp.size, dtype=dt)
+                            inp[:] = -d
+                            inp[i] = v
+                            d[i] = -v if v == -np.inf else v
+                            assert_array_equal(np.abs(inp), d, err_msg=msg)
+                            np.abs(inp, out=out)
+                            assert_array_equal(out, d, err_msg=msg)
 
 
 class TestSpecialMethods(TestCase):
@@ -914,12 +952,6 @@ class TestComplexFunctions(object):
     def test_against_cmath(self):
         import cmath, sys
 
-        # cmath.asinh is broken in some versions of Python, see
-        # http://bugs.python.org/issue1381
-        broken_cmath_asinh = False
-        if sys.version_info < (2,6):
-            broken_cmath_asinh = True
-
         points = [-1-1j, -1+1j, +1-1j, +1+1j]
         name_map = {'arcsin': 'asin', 'arccos': 'acos', 'arctan': 'atan',
                     'arcsinh': 'asinh', 'arccosh': 'acosh', 'arctanh': 'atanh'}
@@ -934,10 +966,6 @@ class TestComplexFunctions(object):
             for p in points:
                 a = complex(func(np.complex_(p)))
                 b = cfunc(p)
-
-                if cname == 'asinh' and broken_cmath_asinh:
-                    continue
-
                 assert_(abs(a - b) < atol, "%s %s: %s; cmath: %s"%(fname,p,a,b))
 
     def check_loss_of_precision(self, dtype):
@@ -1112,12 +1140,9 @@ def _check_branch_cut(f, x0, dx, re_sign=1, im_sign=-1, sig_zero_ok=False,
 
 def test_copysign():
     assert_(np.copysign(1, -1) == -1)
-    old_err = np.seterr(divide="ignore")
-    try:
+    with np.errstate(divide="ignore"):
         assert_(1 / np.copysign(0, -1) < 0)
         assert_(1 / np.copysign(0, 1) > 0)
-    finally:
-        np.seterr(**old_err)
     assert_(np.signbit(np.copysign(np.nan, -1)))
     assert_(not np.signbit(np.copysign(np.nan, 1)))
 
@@ -1144,19 +1169,16 @@ def test_nextafterl():
     return _test_nextafter(np.longdouble)
 
 def _test_spacing(t):
-    err = np.seterr(invalid='ignore')
     one = t(1)
     eps = np.finfo(t).eps
     nan = t(np.nan)
     inf = t(np.inf)
-    try:
+    with np.errstate(invalid='ignore'):
         assert_(np.spacing(one) == eps)
         assert_(np.isnan(np.spacing(nan)))
         assert_(np.isnan(np.spacing(inf)))
         assert_(np.isnan(np.spacing(-inf)))
         assert_(np.spacing(t(1e30)) != 0)
-    finally:
-        np.seterr(**err)
 
 def test_spacing():
     return _test_spacing(np.float64)
@@ -1241,14 +1263,28 @@ def test_reduceat():
     np.setbufsize(np.UFUNC_BUFSIZE_DEFAULT)
     assert_array_almost_equal(h1, h2)
 
+def test_reduceat_empty():
+    """Reduceat should work with empty arrays"""
+    indices = np.array([], 'i4')
+    x = np.array([], 'f8')
+    result = np.add.reduceat(x, indices)
+    assert_equal(result.dtype, x.dtype)
+    assert_equal(result.shape, (0,))
+    # Another case with a slightly different zero-sized shape
+    x = np.ones((5,2))
+    result = np.add.reduceat(x, [], axis=0)
+    assert_equal(result.dtype, x.dtype)
+    assert_equal(result.shape, (0, 2))
+    result = np.add.reduceat(x, [], axis=1)
+    assert_equal(result.dtype, x.dtype)
+    assert_equal(result.shape, (5, 0))
 
 def test_complex_nan_comparisons():
     nans = [complex(np.nan, 0), complex(0, np.nan), complex(np.nan, np.nan)]
     fins = [complex(1, 0), complex(-1, 0), complex(0, 1), complex(0, -1),
             complex(1, 1), complex(-1, -1), complex(0, 0)]
 
-    olderr = np.seterr(invalid='ignore')
-    try:
+    with np.errstate(invalid='ignore'):
         for x in nans + fins:
             x = np.array([x])
             for y in nans + fins:
@@ -1262,8 +1298,6 @@ def test_complex_nan_comparisons():
                 assert_equal(x <= y, False, err_msg="%r <= %r" % (x, y))
                 assert_equal(x >= y, False, err_msg="%r >= %r" % (x, y))
                 assert_equal(x == y, False, err_msg="%r == %r" % (x, y))
-    finally:
-        np.seterr(**olderr)
 
 
 if __name__ == "__main__":

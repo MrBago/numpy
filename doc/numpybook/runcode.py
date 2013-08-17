@@ -1,30 +1,33 @@
-# This script takes a lyx file and runs the python code in it.
-#  Then rewrites the lyx file again.
-#
-# Each section of code portion is assumed to be in the same namespace
-# where a from numpy import * has been applied
-#
-#  If a PYNEW inside a Note is encountered, the name space is restarted
-#
-# The output (if any) is replaced in the file
-#  by the output produced during the code run.
-#
-# Options:
-#   -n name of code section  (default MyCode)
-#
+"""
+This script takes a lyx file and runs the python code in it.
+ Then rewrites the lyx file again.
+
+Each section of code portion is assumed to be in the same namespace
+where a from numpy import * has been applied
+
+ If a PYNEW inside a Note is encountered, the name space is restarted
+
+The output (if any) is replaced in the file
+ by the output produced during the code run.
+
+Options:
+  -n name of code section  (default MyCode)
+
+"""
+from __future__ import division, absolute_import, print_function
 
 import sys
 import optparse
-import cStringIO
+import io
 import re
 import os
 
 newre = re.compile(r"\\begin_inset Note.*PYNEW\s+\\end_inset", re.DOTALL)
 
 def getoutput(tstr, dic):
-    print "\n\nRunning..."
-    print tstr,
-    tempstr = cStringIO.StringIO()
+    print("\n\nRunning...")
+    print(tstr, end=' ')
+    tempstr = io.StringIO()
     sys.stdout = tempstr
     code = compile(tstr, '<input>', 'exec')
     try:
@@ -41,8 +44,8 @@ def getoutput(tstr, dic):
     else:
         res = tempstr.getvalue() + '\n' + repr(res)
     if res != '':
-        print "\nOutput is"
-        print res,
+        print("\nOutput is")
+        print(res, end=' ')
     return res
 
 # now find the code in the code segment
@@ -79,7 +82,7 @@ def getnewcodestr(substr, dic):
 
 def runpycode(lyxstr, name='MyCode'):
     schobj = re.compile(r"\\layout %s\s+>>> " % name)
-    outstr = cStringIO.StringIO()
+    outstr = io.StringIO()
     num = 0
     indx = []
     for it in schobj.finditer(lyxstr):
@@ -87,7 +90,7 @@ def runpycode(lyxstr, name='MyCode'):
         num += 1
 
     if num == 0:
-        print "Nothing found for %s" % name
+        print("Nothing found for %s" % name)
         return lyxstr
 
     start = 0
@@ -138,7 +141,7 @@ def main(args):
     fid = file(args[0])
     str = fid.read()
     fid.close()
-    print "Processing %s" % options.name
+    print("Processing %s" % options.name)
     newstr = runpycode(str, options.name)
     fid = file(args[0],'w')
     fid.write(newstr)

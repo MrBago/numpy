@@ -1,6 +1,7 @@
-""" Test functions for 1D array set operations.
+"""Test functions for 1D array set operations.
 
 """
+from __future__ import division, absolute_import, print_function
 
 from numpy.testing import *
 import numpy as np
@@ -60,8 +61,8 @@ class TestSetOps(TestCase):
 
         # test for structured arrays
         dt = [('', 'i'), ('', 'i')]
-        aa = np.array(zip(a,a), dt)
-        bb = np.array(zip(b,b), dt)
+        aa = np.array(list(zip(a,a)), dt)
+        bb = np.array(list(zip(b,b)), dt)
         check_all(aa, bb, i1, i2, dt)
 
 
@@ -188,6 +189,15 @@ class TestSetOps(TestCase):
         c = in1d(a, b)
 
         assert_array_equal(c, ec)
+
+    def test_in1d_invert(self):
+        "Test in1d's invert parameter"
+        # We use two different sizes for the b array here to test the
+        # two different paths in in1d().
+        for mult in (1, 10):
+            a = np.array([5, 4, 5, 3, 4, 4, 3, 4, 3, 5, 2, 1, 5, 5])
+            b = [2, 3, 4] * mult
+            assert_array_equal(np.invert(in1d(a, b)), in1d(a, b, invert=True))
 
     def test_in1d_ravel(self):
         # Test that in1d ravels its input arrays. This is not documented

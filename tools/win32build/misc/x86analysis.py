@@ -5,6 +5,7 @@
 # checking the assembly for instructions specific to sse, etc... Obviously,
 # this won't work all the times (for example, if some instructions are used
 # only after proper detection of the running CPU, this will give false alarm).
+from __future__ import division, print_function
 
 import sys
 import re
@@ -57,7 +58,7 @@ SSE2_SET = ["addpd", "addsd", "andnpd", "andpd", "clflush", "cmppd", "cmpsd",
         "sqrtsd", "subpd", "subsd", "ucomisd", "unpckhpd", "unpcklpd", "xorpd"]
 
 SSE3_SET = [ "addsubpd", "addsubps", "haddpd", "haddps", "hsubpd", "hsubps",
-        "lddqu", "movddup", "movshdup", "movsldup", "fisttp"] 
+        "lddqu", "movddup", "movshdup", "movsldup", "fisttp"]
 
 def get_vendor_string():
     """Return the vendor string reading cpuinfo."""
@@ -100,7 +101,7 @@ def disassemble(filename):
         else:
             inst = line3[0]
         return inst
-    inst = [floupi(i) for i in o.readlines()]
+    inst = [floupi(i) for i in o]
     return inst
 
 def has_set(seq, asm_set):
@@ -138,10 +139,10 @@ def main():
     analyse(filename)
 
 def analyse(filename):
-    print get_vendor_string()
-    print "Getting instructions..."
+    print(get_vendor_string())
+    print("Getting instructions...")
     inst = disassemble(filename)
-    print "Counting instructions..."
+    print("Counting instructions...")
     sse = has_sse(inst)
     sse2 = has_sse2(inst)
     sse3 = has_sse3(inst)
@@ -150,10 +151,10 @@ def analyse(filename):
     #print sse
     #print sse2
     #print sse3
-    print "SSE3 inst %d" % cntset(sse3)
-    print "SSE2 inst %d" % cntset(sse2)
-    print "SSE inst %d" % cntset(sse)
-    print "Analysed %d instructions" % len(inst)
+    print("SSE3 inst %d" % cntset(sse3))
+    print("SSE2 inst %d" % cntset(sse2))
+    print("SSE inst %d" % cntset(sse))
+    print("Analysed %d instructions" % len(inst))
 
 if __name__ == '__main__':
     main()

@@ -7,14 +7,20 @@ extern NPY_NO_EXPORT PyMappingMethods array_as_mapping;
 NPY_NO_EXPORT PyMappingMethods array_as_mapping;
 #endif
 
-NPY_NO_EXPORT PyObject *
-array_big_item(PyArrayObject *self, npy_intp i);
-
 NPY_NO_EXPORT Py_ssize_t
 array_length(PyArrayObject *self);
 
 NPY_NO_EXPORT PyObject *
-array_item_nice(PyArrayObject *self, Py_ssize_t i);
+array_item_asarray(PyArrayObject *self, npy_intp i);
+
+NPY_NO_EXPORT PyObject *
+array_item_asscalar(PyArrayObject *self, npy_intp i);
+
+NPY_NO_EXPORT PyObject *
+array_item(PyArrayObject *self, Py_ssize_t i);
+
+NPY_NO_EXPORT PyObject *
+array_subscript_asarray(PyArrayObject *self, PyObject *op);
 
 NPY_NO_EXPORT PyObject *
 array_subscript(PyArrayObject *self, PyObject *op);
@@ -22,17 +28,10 @@ array_subscript(PyArrayObject *self, PyObject *op);
 NPY_NO_EXPORT int
 array_ass_big_item(PyArrayObject *self, npy_intp i, PyObject *v);
 
-#if PY_VERSION_HEX < 0x02050000
-        #if NPY_SIZEOF_INT == NPY_SIZEOF_INTP
-                #define array_ass_item array_ass_big_item
-        #endif
+/* SIZEOF_SIZE_T is nowhere defined, Py_ssize_t perhaps?*/
+#if SIZEOF_SIZE_T == NPY_SIZEOF_INTP
+#define array_ass_item array_ass_big_item
 #else
-        /* SIZEOF_SIZE_T is nowhere defined, Py_ssize_t perhaps?*/
-        #if SIZEOF_SIZE_T == NPY_SIZEOF_INTP
-                #define array_ass_item array_ass_big_item
-        #endif
-#endif
-#ifndef array_ass_item
 NPY_NO_EXPORT int
 _array_ass_item(PyArrayObject *self, Py_ssize_t i, PyObject *v);
 #define array_ass_item _array_ass_item

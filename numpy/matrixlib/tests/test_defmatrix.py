@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 from numpy.testing import *
 from numpy.core import *
 from numpy import matrix, asmatrix, bmat
@@ -28,6 +30,10 @@ class TestCtor(TestCase):
         vec = arange(5)
         mvec = matrix(vec)
         assert_(mvec.shape == (1,5))
+
+    def test_exceptions(self):
+        # Check for TypeError when called with invalid string data.
+        assert_raises(TypeError, matrix, "invalid")
 
     def test_bmat_nondefault_str(self):
         A = array([[1,2],[3,4]])
@@ -209,13 +215,13 @@ class TestAlgebra(TestCase):
         mA = matrix(A)
 
         B = identity(2)
-        for i in xrange(6):
+        for i in range(6):
             assert_(allclose((mA ** i).A, B))
             B = dot(B, A)
 
         Ainv = linalg.inv(A)
         B = identity(2)
-        for i in xrange(6):
+        for i in range(6):
             assert_(allclose((mA ** -i).A, B))
             B = dot(B, Ainv)
 
@@ -277,8 +283,9 @@ class TestMatrixReturn(TestCase):
         excluded_methods = [
             'argmin', 'choose', 'dump', 'dumps', 'fill', 'getfield',
             'getA', 'getA1', 'item', 'nonzero', 'put', 'putmask', 'resize',
-            'searchsorted', 'setflags', 'setfield', 'sort', 'take',
-            'tofile', 'tolist', 'tostring', 'all', 'any', 'sum',
+            'searchsorted', 'setflags', 'setfield', 'sort',
+            'partition', 'argpartition',
+            'take', 'tofile', 'tolist', 'tostring', 'all', 'any', 'sum',
             'argmax', 'argmin', 'min', 'max', 'mean', 'var', 'ptp',
             'prod', 'std', 'ctypes', 'itemset', 'setasflat'
             ]

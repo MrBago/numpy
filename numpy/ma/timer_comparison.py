@@ -1,18 +1,19 @@
-import timeit
+from __future__ import division, absolute_import, print_function
 
-import sys
+import timeit
+from functools import reduce
+
 import numpy as np
 from numpy import float_
 import np.core.fromnumeric as fromnumeric
 
 from np.testing.utils import build_err_msg
 
+# Fixme: this does not look right.
 np.seterr(all='ignore')
 
 pi = np.pi
 
-if sys.version_info[0] >= 3:
-    from functools import reduce
 
 class moduletester(object):
     def __init__(self, module):
@@ -450,9 +451,9 @@ if __name__ == '__main__':
             cur = np.sort(cur)
 #            alt = np.sort(alt)
 #            tmp = np.sort(tmp)
-            print "#%i" % i +50*'.'
-            print eval("moduletester.test_%i.__doc__" % i)
+            print("#%i" % i +50*'.')
+            print(eval("moduletester.test_%i.__doc__" % i))
 #            print "core_ini     : %.3f - %.3f" % (new[0], new[1])
-            print "core_current : %.3f - %.3f" % (cur[0], cur[1])
+            print("core_current : %.3f - %.3f" % (cur[0], cur[1]))
 #            print "core_alt     : %.3f - %.3f" % (alt[0], alt[1])
 #            print "core_tmp     : %.3f - %.3f" % (tmp[0], tmp[1])

@@ -97,15 +97,9 @@ PyArray_GetCastFunc(PyArray_Descr *descr, int type_num)
             cls = PyObject_GetAttrString(obj, "ComplexWarning");
             Py_DECREF(obj);
         }
-#if PY_VERSION_HEX >= 0x02050000
         ret = PyErr_WarnEx(cls,
-                           "Casting complex values to real discards "
-                           "the imaginary part", 1);
-#else
-        ret = PyErr_Warn(cls,
-                         "Casting complex values to real discards "
-                         "the imaginary part");
-#endif
+                "Casting complex values to real discards "
+                "the imaginary part", 1);
         Py_XDECREF(cls);
         if (ret < 0) {
             return NULL;
@@ -115,7 +109,8 @@ PyArray_GetCastFunc(PyArray_Descr *descr, int type_num)
         return castfunc;
     }
 
-    PyErr_SetString(PyExc_ValueError, "No cast function available.");
+    PyErr_SetString(PyExc_ValueError,
+            "No cast function available.");
     return NULL;
 }
 
@@ -141,6 +136,12 @@ PyArray_AdaptFlexibleDType(PyObject *data_obj, PyArray_Descr *data_dtype,
 {
     PyArray_DatetimeMetaData *meta;
     int flex_type_num;
+    PyArrayObject *arr = NULL;
+    PyArray_Descr *dtype = NULL;
+    int ndim = 0;
+    npy_intp dims[NPY_MAXDIMS];
+    PyObject *list = NULL;
+    int result;
 
     if (*flex_dtype == NULL) {
         if (!PyErr_Occurred()) {
@@ -220,6 +221,61 @@ PyArray_AdaptFlexibleDType(PyObject *data_obj, PyArray_Descr *data_dtype,
                     break;
                 case NPY_OBJECT:
                     size = 64;
+                    if ((flex_type_num == NPY_STRING ||
+                            flex_type_num == NPY_UNICODE) &&
+                            data_obj != NULL) {
+                        if (PyArray_CheckScalar(data_obj)) {
+                            PyObject *scalar = PyArray_ToList(data_obj);
+                            if (scalar != NULL) {
+                                PyObject *s = PyObject_Str(scalar);
+                                if (s == NULL) {
+                                    Py_DECREF(scalar);
+                                    Py_DECREF(*flex_dtype);
+                                    *flex_dtype = NULL;
+                                    return;
+                                }
+                                else {
+                                    size = PyObject_Length(s);
+                                    Py_DECREF(s);
+                                }
+                                Py_DECREF(scalar);
+                            }
+                        }
+                        else if (PyArray_Check(data_obj)) {
+                            /*
+                             * Convert data array to list of objects since
+                             * GetArrayParamsFromObject won't iterate over
+                             * array.
+                             */
+                            list = PyArray_ToList(data_obj);
+                            result = PyArray_GetArrayParamsFromObject(
+                                    list,
+                                    *flex_dtype,
+                                    0, &dtype,
+                                    &ndim, dims, &arr, NULL);
+                            if (result == 0 && dtype != NULL) {
+                                if (flex_type_num == NPY_UNICODE) {
+                                    size = dtype->elsize / 4;
+                                }
+                                else {
+                                    size = dtype->elsize;
+                                }
+                            }
+                            Py_DECREF(list);
+                        }
+                        else if (PyArray_IsPythonScalar(data_obj)) {
+                            PyObject *s = PyObject_Str(data_obj);
+                            if (s == NULL) {
+                                Py_DECREF(*flex_dtype);
+                                *flex_dtype = NULL;
+                                return;
+                            }
+                            else {
+                                size = PyObject_Length(s);
+                                Py_DECREF(s);
+                            }
+                        }
+                    }
                     break;
                 case NPY_STRING:
                 case NPY_VOID:
@@ -682,7 +738,11 @@ can_cast_scalar_to(PyArray_Descr *scal_type, char *scal_data,
     /* An aligned memory buffer large enough to hold any type */
     npy_longlong value[4];
 
-    if (casting == NPY_UNSAFE_CASTING) {
+    /* 
+     * If the two dtypes are actually references to the same object 
+     * or if casting type is forced unsafe then always OK. 
+     */
+    if (scal_type == to || casting == NPY_UNSAFE_CASTING ) {
         return 1;
     }
 
@@ -1817,7 +1877,7 @@ PyArray_ConvertToCommonType(PyObject *op, int *retn)
 
     if (PyArray_Check(op)) {
         for (i = 0; i < n; i++) {
-            mps[i] = (PyArrayObject *) array_big_item((PyArrayObject *)op, i);
+            mps[i] = (PyArrayObject *) array_item_asarray((PyArrayObject *)op, i);
         }
         if (!PyArray_ISCARRAY((PyArrayObject *)op)) {
             for (i = 0; i < n; i++) {

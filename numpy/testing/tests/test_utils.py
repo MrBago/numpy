@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import warnings
 import sys
 
@@ -376,7 +378,7 @@ class TestArrayAlmostEqualNulp(unittest.TestCase):
     @dec.knownfailureif(True, "Github issue #347")
     def test_simple(self):
         np.random.seed(12345)
-        for i in xrange(100):
+        for i in range(100):
             dev = np.random.randn(10)
             x = np.ones(10)
             y = x + dev * np.finfo(np.float64).eps

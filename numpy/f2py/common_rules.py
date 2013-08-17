@@ -11,11 +11,13 @@ terms of the NumPy License
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Date: 2005/05/06 10:57:33 $
 Pearu Peterson
+
 """
+from __future__ import division, absolute_import, print_function
 
 __version__ = "$Revision: 1.19 $"[10:-1]
 
-import __version__
+from . import __version__
 f2py_version = __version__.version
 
 import pprint
@@ -24,10 +26,10 @@ errmess=sys.stderr.write
 outmess=sys.stdout.write
 show=pprint.pprint
 
-from auxfuncs import *
-import capi_maps
-import func2subr
-from crackfortran import rmbadname
+from .auxfuncs import *
+from . import capi_maps
+from . import func2subr
+from .crackfortran import rmbadname
 ##############
 
 def findcommonblocks(block,top=1):
@@ -94,7 +96,7 @@ def buildhooks(m):
             cadd('\t{\"%s\",%s,{{%s}},%s},'%(n,dm['rank'],dms,at))
         cadd('\t{NULL}\n};')
         inames1 = rmbadname(inames)
-        inames1_tps = ','.join(map(lambda s:'char *'+s,inames1))
+        inames1_tps = ','.join(['char *'+s for s in inames1])
         cadd('static void f2py_setup_%s(%s) {'%(name,inames1_tps))
         cadd('\tint i_f2py=0;')
         for n in inames1:
@@ -119,7 +121,7 @@ def buildhooks(m):
             dadd('\\item[]{{}\\verb@%s@{}}'%(capi_maps.getarrdocsign(n,vars[n])))
             if hasnote(vars[n]):
                 note = vars[n]['note']
-                if type(note) is type([]): note='\n'.join(note)
+                if isinstance(note, list): note='\n'.join(note)
                 dadd('--- %s'%(note))
         dadd('\\end{description}')
         ret['docs'].append('"\t/%s/ %s\\n"'%(name,','.join(map(lambda v,d:v+d,inames,idims))))

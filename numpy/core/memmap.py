@@ -1,10 +1,13 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['memmap']
 
 import warnings
-from numeric import uint8, ndarray, dtype
 import sys
 
 import numpy as np
+from .numeric import uint8, ndarray, dtype
+from numpy.compat import long, basestring
 
 dtypedescr = dtype
 valid_filemodes = ["r", "c", "r+", "w+"]
@@ -199,7 +202,7 @@ class memmap(ndarray):
         except KeyError:
             if mode not in valid_filemodes:
                 raise ValueError("mode must be one of %s" %
-                                 (valid_filemodes + mode_equivalents.keys()))
+                                 (valid_filemodes + list(mode_equivalents.keys())))
 
         if hasattr(filename,'read'):
             fid = filename
@@ -245,14 +248,10 @@ class memmap(ndarray):
         else:
             acc = mmap.ACCESS_WRITE
 
-        if sys.version_info[:2] >= (2,6):
-            # The offset keyword in mmap.mmap needs Python >= 2.6
-            start = offset - offset % mmap.ALLOCATIONGRANULARITY
-            bytes -= start
-            offset -= start
-            mm = mmap.mmap(fid.fileno(), bytes, access=acc, offset=start)
-        else:
-            mm = mmap.mmap(fid.fileno(), bytes, access=acc)
+        start = offset - offset % mmap.ALLOCATIONGRANULARITY
+        bytes -= start
+        offset -= start
+        mm = mmap.mmap(fid.fileno(), bytes, access=acc, offset=start)
 
         self = ndarray.__new__(subtype, shape, dtype=descr, buffer=mm,
             offset=offset, order=order)
@@ -262,8 +261,13 @@ class memmap(ndarray):
 
         if isinstance(filename, basestring):
             self.filename = os.path.abspath(filename)
-        elif hasattr(filename, "name"):
+        # py3 returns int for TemporaryFile().name
+        elif (hasattr(filename, "name") and
+              isinstance(filename.name, basestring)):
             self.filename = os.path.abspath(filename.name)
+        # same as memmap copies (e.g. memmap + 1)
+        else:
+            self.filename = None
 
         if own_file:
             fid.close()

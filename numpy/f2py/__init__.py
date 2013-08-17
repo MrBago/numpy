@@ -1,16 +1,17 @@
 #!/usr/bin/env python
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['run_main','compile','f2py_testing']
 
 import os
 import sys
-import commands
+import subprocess
 
-import f2py2e
-import f2py_testing
-import diagnose
+from . import f2py2e
+from . import f2py_testing
+from . import diagnose
 
-from info import __doc__
+from .info import __doc__
 
 run_main = f2py2e.run_main
 main = f2py2e.main

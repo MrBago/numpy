@@ -1,10 +1,14 @@
-# This is only meant to add docs to objects defined in C-extension modules.
-# The purpose is to allow easier editing of the docstrings without
-# requiring a re-compile.
+"""
+This is only meant to add docs to objects defined in C-extension modules.
+The purpose is to allow easier editing of the docstrings without
+requiring a re-compile.
 
-# NOTE: Many of the methods of ndarray have corresponding functions.
-#       If you update these docstrings, please keep also the ones in
-#       core/fromnumeric.py, core/defmatrix.py up-to-date.
+NOTE: Many of the methods of ndarray have corresponding functions.
+      If you update these docstrings, please keep also the ones in
+      core/fromnumeric.py, core/defmatrix.py up-to-date.
+
+"""
+from __future__ import division, absolute_import, print_function
 
 from numpy.lib import add_newdoc
 
@@ -207,7 +211,7 @@ add_newdoc('numpy.core', 'nditer',
     op_dtypes : dtype or tuple of dtype(s), optional
         The required data type(s) of the operands. If copying or buffering
         is enabled, the data will be converted to/from their original types.
-    order : {'C', 'F', 'A', or 'K'}, optional
+    order : {'C', 'F', 'A', 'K'}, optional
         Controls the iteration order. 'C' means C order, 'F' means
         Fortran order, 'A' means 'F' order if all the arrays are Fortran
         contiguous, 'C' order otherwise, and 'K' means as close to the
@@ -1499,7 +1503,7 @@ add_newdoc('numpy.core.multiarray', 'lexsort',
 
     Parameters
     ----------
-    keys : (k,N) array or tuple containing k (N,)-shaped sequences
+    keys : (k, N) array or tuple containing k (N,)-shaped sequences
         The `k` different "columns" to be sorted.  The last column (or row if
         `keys` is a 2D array) is the primary sort key.
     axis : int, optional
@@ -1594,7 +1598,6 @@ add_newdoc('numpy.core.multiarray', 'can_cast',
 
     Examples
     --------
-
     Basic examples
 
     >>> np.can_cast(np.int32, np.int64)
@@ -1974,7 +1977,7 @@ add_newdoc('numpy.core', 'einsum',
         If provided, forces the calculation to use the data type specified.
         Note that you may have to also give a more liberal `casting`
         parameter to allow the conversions.
-    order : {'C', 'F', 'A', or 'K'}, optional
+    order : {'C', 'F', 'A', 'K'}, optional
         Controls the memory layout of the output. 'C' means it should
         be C contiguous. 'F' means it should be Fortran contiguous,
         'A' means it should be 'F' if the inputs are all 'F', 'C' otherwise.
@@ -2611,12 +2614,11 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('flags',
         created writeable view onto it.)  Attempting to change a non-writeable
         array raises a RuntimeError exception.
     ALIGNED (A)
-        The data and strides are aligned appropriately for the hardware.
+        The data and all elements are aligned appropriately for the hardware.
     UPDATEIFCOPY (U)
         This array is a copy of some other array. When this array is
         deallocated, the base array will be updated with the contents of
         this array.
-
     FNC
         F_CONTIGUOUS and not C_CONTIGUOUS.
     FORC
@@ -2646,6 +2648,16 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('flags',
       or the ultimate owner of the memory exposes a writeable buffer
       interface or is a string.
 
+    Arrays can be both C-style and Fortran-style contiguous simultaneously. 
+    This is clear for 1-dimensional arrays, but can also be true for higher
+    dimensional arrays.
+
+    Even for contiguous arrays a stride for a given dimension
+    ``arr.strides[dim]`` may be *arbitrary* if ``arr.shape[dim] == 1``
+    or the array has no elements.
+    It does *not* generally hold that ``self.strides[-1] == self.itemsize``
+    for C-style contiguous arrays or ``self.strides[0] == self.itemsize`` for
+    Fortran-style contiguous arrays is true.
     """))
 
 
@@ -3033,6 +3045,23 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('argsort',
     """))
 
 
+add_newdoc('numpy.core.multiarray', 'ndarray', ('argpartition',
+    """
+    a.argpartition(kth, axis=-1, kind='quickselect', order=None)
+
+    Returns the indices that would partition this array.
+
+    Refer to `numpy.argpartition` for full documentation.
+
+    .. versionadded:: 1.8.0
+
+    See Also
+    --------
+    numpy.argpartition : equivalent function
+
+    """))
+
+
 add_newdoc('numpy.core.multiarray', 'ndarray', ('astype',
     """
     a.astype(dtype, order='K', casting='unsafe', subok=True, copy=True)
@@ -3043,7 +3072,7 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('astype',
     ----------
     dtype : str or dtype
         Typecode or data-type to which the array is cast.
-    order : {'C', 'F', 'A', or 'K'}, optional
+    order : {'C', 'F', 'A', 'K'}, optional
         Controls the memory layout order of the result.
         'C' means C order, 'F' means Fortran order, 'A'
         means 'F' order if all the arrays are Fortran contiguous,
@@ -3079,7 +3108,7 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('astype',
 
     Raises
     ------
-    ComplexWarning :
+    ComplexWarning
         When casting from complex to float or int. To avoid this,
         one should use ``a.real.astype(t)``.
 
@@ -3106,12 +3135,12 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('byteswap',
 
     Parameters
     ----------
-    inplace: bool, optional
+    inplace : bool, optional
         If ``True``, swap bytes in-place, default is ``False``.
 
     Returns
     -------
-    out: ndarray
+    out : ndarray
         The byteswapped array. If `inplace` is ``True``, this is
         a view to self.
 
@@ -3634,6 +3663,32 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('min',
     numpy.amin : equivalent function
 
     """))
+
+
+add_newdoc('numpy.core.multiarray', 'may_share_memory',
+    """
+    Determine if two arrays can share memory
+
+    The memory-bounds of a and b are computed.  If they overlap then
+    this function returns True.  Otherwise, it returns False.
+
+    A return of True does not necessarily mean that the two arrays
+    share any element.  It just means that they *might*.
+
+    Parameters
+    ----------
+    a, b : ndarray
+
+    Returns
+    -------
+    out : bool
+
+    Examples
+    --------
+    >>> np.may_share_memory(np.array([1,2]), np.array([5,8,9]))
+    False
+
+    """)
 
 
 add_newdoc('numpy.core.multiarray', 'ndarray', ('newbyteorder',
@@ -4163,6 +4218,58 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('sort',
     """))
 
 
+add_newdoc('numpy.core.multiarray', 'ndarray', ('partition',
+    """
+    a.partition(kth, axis=-1, kind='introselect', order=None)
+
+    Rearranges the elements in the array in such a way that value of the
+    element in kth position is in the position it would be in a sorted array.
+    All elements smaller than the kth element are moved before this element and
+    all equal or greater are moved behind it. The ordering of the elements in
+    the two partitions is undefined.
+
+    .. versionadded:: 1.8.0
+
+    Parameters
+    ----------
+    kth : int or sequence of ints
+        Element index to partition by. The kth element value will be in its
+        final sorted position and all smaller elements will be moved before it
+        and all equal or greater elements behind it.
+        The order all elements in the partitions is undefined.
+        If provided with a sequence of kth it will partition all elements
+        indexed by kth of them into their sorted position at once.
+    axis : int, optional
+        Axis along which to sort. Default is -1, which means sort along the
+        last axis.
+    kind : {'introselect'}, optional
+        Selection algorithm. Default is 'introselect'.
+    order : list, optional
+        When `a` is an array with fields defined, this argument specifies
+        which fields to compare first, second, etc.  Not all fields need be
+        specified.
+
+    See Also
+    --------
+    numpy.partition : Return a parititioned copy of an array.
+    argpartition : Indirect partition.
+
+    Notes
+    -----
+    See ``np.partition`` for notes on the different algorithms.
+
+    Examples
+    --------
+    >>> a = np.array([3, 4, 2, 1])
+    >>> a.partition(a, 3)
+    >>> a
+    array([2, 1, 3, 4])
+
+    >>> a.partition((1, 3))
+    array([1, 2, 3, 4])
+    """))
+
+
 add_newdoc('numpy.core.multiarray', 'ndarray', ('squeeze',
     """
     a.squeeze(axis=None)
@@ -4460,6 +4567,15 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('view',
     (same shape, dtype, etc.)  This does not cause a reinterpretation of the
     memory.
 
+    For ``a.view(some_dtype)``, if ``some_dtype`` has a different number of
+    bytes per entry than the previous dtype (for example, converting a
+    regular array to a structured array), then the behavior of the view
+    cannot be predicted just from the superficial appearance of ``a`` (shown
+    by ``print(a)``). It also depends on exactly how ``a`` is stored in
+    memory. Therefore if ``a`` is C-ordered versus fortran-ordered, versus
+    defined as a slice or transpose, etc., the view may give different
+    results.
+
 
     Examples
     --------
@@ -4501,6 +4617,22 @@ add_newdoc('numpy.core.multiarray', 'ndarray', ('view',
     >>> z[0]
     (9, 10)
 
+    Views that change the dtype size (bytes per entry) should normally be
+    avoided on arrays defined by slices, transposes, fortran-ordering, etc.:
+
+    >>> x = np.array([[1,2,3],[4,5,6]], dtype=np.int16)
+    >>> y = x[:, 0:2]
+    >>> y
+    array([[1, 2],
+           [4, 5]], dtype=int16)
+    >>> y.view(dtype=[('width', np.int16), ('length', np.int16)])
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+    ValueError: new type not compatible with array.
+    >>> z = y.copy()
+    >>> z.view(dtype=[('width', np.int16), ('length', np.int16)])
+    array([[(1, 2)],
+           [(4, 5)]], dtype=[('width', '<i2'), ('length', '<i2')])
     """))
 
 
@@ -5029,7 +5161,6 @@ add_newdoc('numpy.lib._compiled_base', 'add_newdoc_ufunc',
 
     Notes
     -----
-
     This method allocates memory for new_docstring on
     the heap. Technically this creates a mempory leak, since this
     memory will not be reclaimed until the end of the program
@@ -5376,7 +5507,7 @@ add_newdoc('numpy.core', 'ufunc', ('reduce',
     ::
 
      r = op.identity # op = ufunc
-     for i in xrange(len(A)):
+     for i in range(len(A)):
        r = op(r, A[i])
      return r
 
@@ -5457,7 +5588,7 @@ add_newdoc('numpy.core', 'ufunc', ('accumulate',
 
       r = np.empty(len(A))
       t = op.identity        # op = the ufunc being applied to A's  elements
-      for i in xrange(len(A)):
+      for i in range(len(A)):
           t = op(t, A[i])
           r[i] = t
       return r
@@ -5637,8 +5768,8 @@ add_newdoc('numpy.core', 'ufunc', ('outer',
     For `A` and `B` one-dimensional, this is equivalent to::
 
       r = empty(len(A),len(B))
-      for i in xrange(len(A)):
-          for j in xrange(len(B)):
+      for i in range(len(A)):
+          for j in range(len(B)):
               r[i,j] = op(A[i], B[j]) # op = ufunc in question
 
     Parameters
@@ -5684,6 +5815,59 @@ add_newdoc('numpy.core', 'ufunc', ('outer',
 
     """))
 
+add_newdoc('numpy.core', 'ufunc', ('at',
+    """
+    at(a, indices, b=None)
+
+    Performs unbuffered in place operation on operand 'a' for elements
+    specified by 'indices'. For addition ufunc, this method is equivalent to
+    `a[indices] += b`, except that results are accumulated for elements that
+    are indexed more than once. For example, `a[[0,0]] += 1` will only
+    increment the first element once because of buffering, whereas
+    `add.at(a, [0,0], 1)` will increment the first element twice.
+
+    Parameters
+    ----------
+    a : array_like
+        The array to perform in place operation on.
+    indices : array_like or tuple
+        Array like index object or slice object for indexing into first
+        operand. If first operand has multiple dimensions, indices can be a
+        tuple of array like index objects or slice objects.
+    b : array_like
+        Second operand for ufuncs requiring two operands. Operand must be
+        broadcastable over first operand after indexing or slicing.
+
+    Examples
+    --------
+    Set items 0 and 1 to their negative values:
+
+    >>> a = np.array([1, 2, 3, 4])
+    >>> np.negative.at(a, [0, 1])
+    >>> print(a)
+    array([-1, -2, 3, 4])
+
+    ::
+
+    Increment items 0 and 1, and increment item 2 twice:
+
+    >>> a = np.array([1, 2, 3, 4])
+    >>> np.add.at(a, [0, 1, 2, 2], 1)
+    >>> print(a)
+    array([2, 3, 5, 4])
+
+    ::
+
+    Add items 0 and 1 in first array to second array,
+    and store results in first array:
+
+    >>> a = np.array([1, 2, 3, 4])
+    >>> b = np.array([1, 2])
+    >>> np.add.at(a, [0, 1], b)
+    >>> print(a)
+    array([2, 4, 3, 4])
+
+    """))
 
 ##############################################################################
 #
@@ -5871,7 +6055,6 @@ add_newdoc('numpy.core.multiarray', 'dtype', ('fields',
 
     Examples
     --------
-
     >>> dt = np.dtype([('name', np.str_, 16), ('grades', np.float64, (2,))])
     >>> print dt.fields
     {'grades': (dtype(('float64',(2,))), 16), 'name': (dtype('|S16'), 0)}
@@ -5979,7 +6162,6 @@ add_newdoc('numpy.core.multiarray', 'dtype', ('names',
 
     Examples
     --------
-
     >>> dt = np.dtype([('name', np.str_, 16), ('grades', np.float64, (2,))])
     >>> dt.names
     ('name', 'grades')

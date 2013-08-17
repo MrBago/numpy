@@ -17,7 +17,9 @@ Usage:
     collectinput <infile> <outfile>
     collectinput <infile>           # <outfile>=inputless_<infile>
     collectinput                    # in and out are stdin and stdout
+
 """
+from __future__ import division, absolute_import, print_function
 
 __version__ = "0.0"
 
@@ -25,7 +27,11 @@ stdoutflag=0
 import sys
 import fileinput
 import re
-import commands
+
+if sys.version_info[0] >= 3:
+    from subprocess import getoutput
+else:
+    from commands import getoutput
 
 try: fn=sys.argv[2]
 except:
@@ -62,16 +68,16 @@ for l in fileinput.input(fi):
                 except: flag=0
             if flag==0:
                 sys.stderr.write('Could not open a file: '+fn+'\n')
-                print l+l1
+                print(l+l1)
                 continue
             elif flag==1:
                 sys.stderr.write(fn+'\n')
-                print '%%%%% Begin of '+fn
-                print commands.getoutput(sys.argv[0]+' < '+fn)
-                print '%%%%% End of '+fn
+                print('%%%%% Begin of '+fn)
+                print(getoutput(sys.argv[0]+' < '+fn))
+                print('%%%%% End of '+fn)
         else:
             sys.stderr.write('Could not extract a file name from: '+l)
-            print l+l1
+            print(l+l1)
     else:
-        print l+l1
+        print(l+l1)
 sys.stdout.close()

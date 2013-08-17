@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import division, absolute_import, print_function
 
 import sys, os, re
 
@@ -20,33 +21,14 @@ sys.path.insert(0, os.path.abspath('../sphinxext'))
 
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.pngmath', 'numpydoc',
               'sphinx.ext.intersphinx', 'sphinx.ext.coverage',
-              'sphinx.ext.doctest', 'sphinx.ext.autosummary']
-
-# Determine if the matplotlib has a recent enough version of the
-# plot_directive, otherwise use the local fork.
-try:
-    from matplotlib.sphinxext import plot_directive
-except ImportError:
-    use_matplotlib_plot_directive = False
-else:
-    try:
-        use_matplotlib_plot_directive = (plot_directive.__version__ >= 2)
-    except AttributeError:
-        use_matplotlib_plot_directive = False
-
-if use_matplotlib_plot_directive:
-    extensions.append('matplotlib.sphinxext.plot_directive')
-else:
-    extensions.append('plot_directive')
+              'sphinx.ext.doctest', 'sphinx.ext.autosummary',
+              'matplotlib.sphinxext.plot_directive']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
 # The suffix of source filenames.
 source_suffix = '.rst'
-
-# The master toctree document.
-#master_doc = 'index'
 
 # General substitutions.
 project = 'NumPy'
@@ -61,7 +43,7 @@ version = re.sub(r'(\d+\.\d+)\.\d+(.*)', r'\1\2', numpy.__version__)
 version = re.sub(r'(\.dev\d+).*?$', r'\1', version)
 # The full version, including alpha/beta/rc tags.
 release = numpy.__version__
-print version, release
+print("%s %s" % (version, release))
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -98,62 +80,50 @@ pygments_style = 'sphinx'
 # HTML output
 # -----------------------------------------------------------------------------
 
-# The style sheet to use for HTML and HTML Help pages. A file of that name
-# must exist either in Sphinx' static/ path, or in one of the custom paths
-# given in html_static_path.
-html_style = 'scipy.css'
+themedir = os.path.join(os.pardir, 'scipy-sphinx-theme', '_theme')
+if not os.path.isdir(themedir):
+    raise RuntimeError("Get the scipy-sphinx-theme first, "
+                       "via git submodule init && git submodule update")
+    
+html_theme = 'scipy'
+html_theme_path = [themedir]
 
-# The name for this set of Sphinx documents.  If None, it defaults to
-# "<project> v<release> documentation".
-html_title = "%s v%s Manual (DRAFT)" % (project, version)
+if 'scipyorg' in tags:
+    # Build for the scipy.org website
+    html_theme_options = {
+        "edit_link": True,
+        "sidebar": "right",
+        "scipy_org_logo": True,
+        "rootlinks": [("http://scipy.org/", "Scipy.org"),
+                      ("http://docs.scipy.org/", "Docs")]
+    }
+else:
+    # Default build
+    html_theme_options = {
+        "edit_link": False,
+        "sidebar": "left",
+        "scipy_org_logo": False,
+        "rootlinks": []
+    }
+    html_sidebars = {'index': 'indexsidebar.html'}
 
-# The name of an image file (within the static path) to place at the top of
-# the sidebar.
-html_logo = 'scipyshiny_small.png'
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
-
-# If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
-# using the given strftime format.
-html_last_updated_fmt = '%b %d, %Y'
-
-# If true, SmartyPants will be used to convert quotes and dashes to
-# typographically correct entities.
-#html_use_smartypants = True
-
-# Custom sidebar templates, maps document names to template names.
-html_sidebars = {
-    'index': 'indexsidebar.html'
-}
-
-# Additional templates that should be rendered to pages, maps page names to
-# template names.
 html_additional_pages = {
     'index': 'indexcontent.html',
-}
+} 
 
-# If false, no module index is generated.
+html_title = "%s v%s Manual" % (project, version)
+html_static_path = ['_static']
+html_last_updated_fmt = '%b %d, %Y'
+
 html_use_modindex = True
+html_copy_source = False
+html_domain_indices = False
+html_file_suffix = '.html'
 
-# If true, the reST sources are included in the HTML build as _sources/<name>.
-#html_copy_source = True
-
-# If true, an OpenSearch description file will be output, and all pages will
-# contain a <link> tag referring to it.  The value of this option must be the
-# base URL from which the finished HTML is served.
-#html_use_opensearch = ''
-
-# If nonempty, this is the file name suffix for HTML files (e.g. ".html").
-#html_file_suffix = '.html'
-
-# Output file base name for HTML help builder.
 htmlhelp_basename = 'numpy'
 
-# Pngmath should try to align formulas properly
 pngmath_use_preview = True
+pngmath_dvipng_args = ['-gamma', '1.5', '-D', '96', '-bg', 'Transparent']
 
 
 # -----------------------------------------------------------------------------
@@ -212,6 +182,18 @@ latex_preamble = r'''
 
 # If false, no module index is generated.
 latex_use_modindex = False
+
+
+# -----------------------------------------------------------------------------
+# Texinfo output
+# -----------------------------------------------------------------------------
+
+texinfo_documents = [
+  ("contents", 'numpy', 'Numpy Documentation', _stdauthor, 'Numpy',
+   "NumPy: array processing for numbers, strings, records, and objects.",
+   'Programming',
+   1),
+]
 
 
 # -----------------------------------------------------------------------------
@@ -283,9 +265,6 @@ plot_rcparams = {
     'text.usetex': False,
 }
 
-if not use_matplotlib_plot_directive:
-    import matplotlib
-    matplotlib.rcParams.update(plot_rcparams)
 
 # -----------------------------------------------------------------------------
 # Source code links
@@ -294,7 +273,7 @@ if not use_matplotlib_plot_directive:
 import inspect
 from os.path import relpath, dirname
 
-for name in ['sphinx.ext.linkcode', 'linkcode', 'numpydoc.linkcode']:
+for name in ['sphinx.ext.linkcode', 'numpydoc.linkcode']:
     try:
         __import__(name)
         extensions.append(name)
@@ -302,7 +281,7 @@ for name in ['sphinx.ext.linkcode', 'linkcode', 'numpydoc.linkcode']:
     except ImportError:
         pass
 else:
-    print "NOTE: linkcode extension not found -- no links to source generated"
+    print("NOTE: linkcode extension not found -- no links to source generated")
 
 def linkcode_resolve(domain, info):
     """

@@ -51,6 +51,8 @@ NPY_NO_EXPORT int NPY_NUMUSERTYPES = 0;
 #include "item_selection.h"
 #include "shape.h"
 #include "ctors.h"
+#include "array_assign.h"
+#include "common.h"
 
 /* Only here for API compatibility */
 NPY_NO_EXPORT PyTypeObject PyBigArray_Type;
@@ -67,15 +69,13 @@ PyArray_GetPriority(PyObject *obj, double default_)
     if (PyArray_CheckExact(obj))
         return priority;
 
-    ret = PyObject_GetAttrString(obj, "__array_priority__");
-    if (ret != NULL) {
-        priority = PyFloat_AsDouble(ret);
+    ret = PyArray_GetAttrString_SuppressException(obj, "__array_priority__");
+    if (ret == NULL) {
+        return default_;
     }
-    if (PyErr_Occurred()) {
-        PyErr_Clear();
-        priority = default_;
-    }
-    Py_XDECREF(ret);
+
+    priority = PyFloat_AsDouble(ret);
+    Py_DECREF(ret);
     return priority;
 }
 
@@ -338,7 +338,7 @@ PyArray_ConcatenateArrays(int narrays, PyArrayObject **arrays, int axis)
         axis += ndim;
     }
 
-    if (ndim == 1 & axis != 0) {
+    if (ndim == 1 && axis != 0) {
         char msg[] = "axis != 0 for ndim == 1; this will raise an error in "
                      "future versions of numpy";
         if (DEPRECATE(msg) < 0) {
@@ -1510,20 +1510,31 @@ PyArray_EquivTypenums(int typenum1, int typenum2)
 }
 
 /*** END C-API FUNCTIONS **/
-
+/*
+ * NPY_RELAXED_STRIDES_CHECKING: If the strides logic is changed, the
+ * order specific stride setting is not necessary.
+ */
 static PyObject *
-_prepend_ones(PyArrayObject *arr, int nd, int ndmin)
+_prepend_ones(PyArrayObject *arr, int nd, int ndmin, NPY_ORDER order)
 {
     npy_intp newdims[NPY_MAXDIMS];
     npy_intp newstrides[NPY_MAXDIMS];
+    npy_intp newstride;
     int i, k, num;
     PyArrayObject *ret;
     PyArray_Descr *dtype;
 
+    if (order == NPY_FORTRANORDER || PyArray_ISFORTRAN(arr) || PyArray_NDIM(arr) == 0) {
+        newstride = PyArray_DESCR(arr)->elsize;
+    }
+    else {
+        newstride = PyArray_STRIDES(arr)[0] * PyArray_DIMS(arr)[0];
+    }
+
     num = ndmin - nd;
     for (i = 0; i < num; i++) {
         newdims[i] = 1;
-        newstrides[i] = PyArray_DESCR(arr)->elsize;
+        newstrides[i] = newstride;
     }
     for (i = num; i < ndmin; i++) {
         k = i - num;
@@ -1664,7 +1675,7 @@ _array_fromobject(PyObject *NPY_UNUSED(ignored), PyObject *args, PyObject *kws)
      * create a new array from the same data with ones in the shape
      * steals a reference to ret
      */
-    return _prepend_ones(ret, nd, ndmin);
+    return _prepend_ones(ret, nd, ndmin, order);
 
 clean_type:
     Py_XDECREF(type);
@@ -1922,15 +1933,8 @@ array_count_nonzero(PyObject *NPY_UNUSED(self), PyObject *args, PyObject *kwds)
     }
 #if defined(NPY_PY3K)
     return PyLong_FromSsize_t(count);
-#elif PY_VERSION_HEX >= 0x02050000
-    return PyInt_FromSsize_t(count);
 #else
-    if ((npy_intp)((long)count) == count) {
-        return PyInt_FromLong(count);
-    }
-    else {
-        return PyLong_FromVoidPtr((void*)count);
-    }
+    return PyInt_FromSsize_t(count);
 #endif
 }
 
@@ -3496,6 +3500,26 @@ PyDataMem_NEW(size_t size)
 }
 
 /*NUMPY_API
+ * Allocates zeroed memory for array data.
+ */
+NPY_NO_EXPORT void *
+PyDataMem_NEW_ZEROED(size_t size, size_t elsize)
+{
+    void *result;
+
+    result = calloc(size, elsize);
+    if (_PyDataMem_eventhook != NULL) {
+        PyGILState_STATE gilstate = PyGILState_Ensure();
+        if (_PyDataMem_eventhook != NULL) {
+            (*_PyDataMem_eventhook)(NULL, result, size * elsize,
+                                    _PyDataMem_eventhook_user_data);
+        }
+        PyGILState_Release(gilstate);
+    }
+    return (char *)result;
+}
+
+/*NUMPY_API
  * Free memory for array data.
  */
 NPY_NO_EXPORT void
@@ -3531,6 +3555,32 @@ PyDataMem_RENEW(void *ptr, size_t size)
     }
     return (char *)result;
 }
+
+static PyObject *
+array_may_share_memory(PyObject *NPY_UNUSED(ignored), PyObject *args)
+{
+    PyArrayObject * self = NULL;
+    PyArrayObject * other = NULL;
+    int overlap;
+
+    if (!PyArg_ParseTuple(args, "O&O&", PyArray_Converter, &self,
+                          PyArray_Converter, &other)) {
+        return NULL;
+    }
+
+    overlap = arrays_overlap(self, other);
+    Py_XDECREF(self);
+    Py_XDECREF(other);
+
+    if (overlap) {
+        Py_RETURN_TRUE;
+    }
+    else {
+        Py_RETURN_FALSE;
+    }
+}
+
+
 
 static struct PyMethodDef array_module_methods[] = {
     {"_get_ndarray_c_version",
@@ -3631,6 +3681,9 @@ static struct PyMethodDef array_module_methods[] = {
         METH_VARARGS, NULL},
     {"result_type",
         (PyCFunction)array_result_type,
+        METH_VARARGS, NULL},
+    {"may_share_memory",
+        (PyCFunction)array_may_share_memory,
         METH_VARARGS, NULL},
     /* Datetime-related functions */
     {"datetime_data",
@@ -3750,6 +3803,19 @@ setup_scalartypes(PyObject *NPY_UNUSED(dict))
     }                                                                   \
     Py##child##ArrType_Type.tp_hash = Py##parent1##_Type.tp_hash;
 
+/*
+ * In Py3K, int is no longer a fixed-width integer type, so don't
+ * inherit numpy.int_ from it.
+ */
+#if defined(NPY_PY3K)
+#define INHERIT_INT(child, parent2)                                     \
+    SINGLE_INHERIT(child, parent2);
+#else
+#define INHERIT_INT(child, parent2)                                     \
+    Py##child##ArrType_Type.tp_flags |= Py_TPFLAGS_INT_SUBCLASS;        \
+    DUAL_INHERIT(child, Int, parent2);
+#endif
+
 #if defined(NPY_PY3K)
 #define DUAL_INHERIT_COMPARE(child, parent1, parent2)
 #else
@@ -3778,18 +3844,17 @@ setup_scalartypes(PyObject *NPY_UNUSED(dict))
     SINGLE_INHERIT(Bool, Generic);
     SINGLE_INHERIT(Byte, SignedInteger);
     SINGLE_INHERIT(Short, SignedInteger);
-#if NPY_SIZEOF_INT == NPY_SIZEOF_LONG && !defined(NPY_PY3K)
-    DUAL_INHERIT(Int, Int, SignedInteger);
+
+#if NPY_SIZEOF_INT == NPY_SIZEOF_LONG
+    INHERIT_INT(Int, SignedInteger);
 #else
     SINGLE_INHERIT(Int, SignedInteger);
 #endif
-#if !defined(NPY_PY3K)
-    DUAL_INHERIT(Long, Int, SignedInteger);
-#else
-    SINGLE_INHERIT(Long, SignedInteger);
-#endif
-#if NPY_SIZEOF_LONGLONG == NPY_SIZEOF_LONG && !defined(NPY_PY3K)
-    DUAL_INHERIT(LongLong, Int, SignedInteger);
+
+    INHERIT_INT(Long, SignedInteger);
+
+#if NPY_SIZEOF_LONGLONG == NPY_SIZEOF_LONG
+    INHERIT_INT(LongLong, SignedInteger);
 #else
     SINGLE_INHERIT(LongLong, SignedInteger);
 #endif
@@ -3831,6 +3896,9 @@ setup_scalartypes(PyObject *NPY_UNUSED(dict))
 
 #undef SINGLE_INHERIT
 #undef DUAL_INHERIT
+#undef INHERIT_INT
+#undef DUAL_INHERIT2
+#undef DUAL_INHERIT_COMPARE
 
     /*
      * Clean up string and unicode array types so they act more like

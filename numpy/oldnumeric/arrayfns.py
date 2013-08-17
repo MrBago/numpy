@@ -1,5 +1,7 @@
-"""Backward compatible with arrayfns from Numeric
+"""Backward compatible with arrayfns from Numeric.
+
 """
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['array_set', 'construct3', 'digitize', 'error', 'find_mask',
            'histogram', 'index_sort', 'interp', 'nz', 'reverse', 'span',
@@ -20,7 +22,7 @@ def array_set(vals1, indices, vals2):
     vals1 = asarray(vals1)
     vals2 = asarray(vals2)
     if vals1.ndim != vals2.ndim or vals1.ndim < 1:
-        raise error, "vals1 and vals2 must have same number of dimensions (>=1)"
+        raise error("vals1 and vals2 must have same number of dimensions (>=1)")
     vals1[indices] = vals2
 
 from numpy import digitize
@@ -38,7 +40,7 @@ def interp(y, x, z, typ=None):
     if typ == 'f':
         return res.astype('f')
 
-    raise error, "incompatible typecode"
+    raise error("incompatible typecode")
 
 def nz(x):
     x = asarray(x,dtype=np.ubyte)

@@ -1,7 +1,7 @@
 """Tests for polynomial module.
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 import numpy.polynomial.polynomial as poly
@@ -253,7 +253,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = poly.polyint(tgt, m=1, k=[k])
-                res = poly.polyint(pol, m=j, k=range(j))
+                res = poly.polyint(pol, m=j, k=list(range(j)))
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with lbnd
@@ -263,7 +263,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = poly.polyint(tgt, m=1, k=[k], lbnd=-1)
-                res = poly.polyint(pol, m=j, k=range(j), lbnd=-1)
+                res = poly.polyint(pol, m=j, k=list(range(j)), lbnd=-1)
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with scaling
@@ -273,7 +273,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = poly.polyint(tgt, m=1, k=[k], scl=2)
-                res = poly.polyint(pol, m=j, k=range(j), scl=2)
+                res = poly.polyint(pol, m=j, k=list(range(j)), scl=2)
                 assert_almost_equal(trim(res), trim(tgt))
 
     def test_polyint_axis(self):
@@ -381,6 +381,21 @@ class TestVander(TestCase):
         # check shape
         van = poly.polyvander3d([x1], [x2], [x3], [1, 2, 3])
         assert_(van.shape == (1, 5, 24))
+
+
+class TestCompanion(TestCase):
+
+    def test_raises(self):
+        assert_raises(ValueError, poly.polycompanion, [])
+        assert_raises(ValueError, poly.polycompanion, [1])
+
+    def test_dimensions(self):
+        for i in range(1, 5):
+            coef = [0]*i + [1]
+            assert_(poly.polycompanion(coef).shape == (i, i))
+
+    def test_linear_root(self):
+        assert_(poly.polycompanion([1, 2])[0, 0] == -.5)
 
 
 class TestMisc(TestCase) :

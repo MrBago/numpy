@@ -321,9 +321,9 @@ advanced usage and will not typically be used.
 
     Specifies the calculation iteration order/memory layout of the output array.
     Defaults to 'K'. 'C' means the output should be C-contiguous, 'F' means
-    F-contiguous, 'A' means F-contiguous if the inputs are F-contiguous, C-contiguous
-    otherwise, and 'K' means to match the element ordering of the inputs
-    as closely as possible.
+    F-contiguous, 'A' means F-contiguous if the inputs are F-contiguous and
+    not also not C-contiguous, C-contiguous otherwise, and 'K' means to match
+    the element ordering of the inputs as closely as possible.
 
 *dtype*
 
@@ -417,6 +417,12 @@ an integer (or Boolean) data-type and smaller than the size of the
 :class:`int_` data type, it will be internally upcast to the :class:`int_`
 (or :class:`uint`) data-type.
 
+Ufuncs also have a fifth method that allows in place operations to be
+performed using fancy indexing. No buffering is used on the dimensions where
+fancy indexing is used, so the fancy index can list an item more than once and
+the operation will be performed on the result of the previous operation for
+that item.
+
 .. index::
    pair: ufunc; methods
 
@@ -427,6 +433,7 @@ an integer (or Boolean) data-type and smaller than the size of the
    ufunc.accumulate
    ufunc.reduceat
    ufunc.outer
+   ufunc.at
 
 
 .. warning::
@@ -604,6 +611,10 @@ Comparison functions
     ``a > b`` and uses it to return either `a` or `b` (as a whole). A similar
     difference exists between ``minimum(a, b)`` and ``min(a, b)``.
 
+.. autosummary::
+
+    fmax
+    fmin
 
 Floating functions
 ------------------

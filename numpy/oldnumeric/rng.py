@@ -1,8 +1,10 @@
-# This module re-creates the RNG interface from Numeric
-# Replace import RNG with import numpy.oldnumeric.rng as RNG
-#
-# It is for backwards compatibility only.
+"""Re-create the RNG interface from Numeric.
 
+Replace import RNG with import numpy.oldnumeric.rng as RNG.
+It is for backwards compatibility only.
+
+"""
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['CreateGenerator','ExponentialDistribution','LogNormalDistribution',
            'NormalDistribution', 'UniformDistribution', 'error', 'ranf',
@@ -36,7 +38,7 @@ class Distribution(object):
 class ExponentialDistribution(Distribution):
     def __init__(self, lambda_):
         if (lambda_ <= 0):
-            raise error, "parameter must be positive"
+            raise error("parameter must be positive")
         Distribution.__init__(self, 'exponential', lambda_)
 
     def density(x):
@@ -51,7 +53,7 @@ class LogNormalDistribution(Distribution):
         m = float(m)
         s = float(s)
         if (s <= 0):
-            raise error, "standard deviation must be positive"
+            raise error("standard deviation must be positive")
         Distribution.__init__(self, 'lognormal', m, s)
         sn = math.log(1.0+s*s/(m*m));
         self._mn = math.log(m)-0.5*sn
@@ -69,7 +71,7 @@ class NormalDistribution(Distribution):
         m = float(m)
         s = float(s)
         if (s <= 0):
-            raise error, "standard deviation must be positive"
+            raise error("standard deviation must be positive")
         Distribution.__init__(self, 'normal', m, s)
         self._fac = 1.0/math.sqrt(2*math.pi)/s
 
@@ -84,7 +86,7 @@ class UniformDistribution(Distribution):
         b = float(b)
         width = b-a
         if (width <=0):
-            raise error, "width of uniform distribution must be > 0"
+            raise error("width of uniform distribution must be > 0")
         Distribution.__init__(self, 'uniform', a, b)
         self._fac = 1.0/width
 
@@ -106,7 +108,7 @@ class CreateGenerator(object):
         if dist is None:
             dist = default_distribution
         if not isinstance(dist, Distribution):
-            raise error, "Not a distribution object"
+            raise error("Not a distribution object")
         self._dist = dist
 
     def ranf(self):

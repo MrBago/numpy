@@ -12,27 +12,27 @@ terms of the NumPy License.
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Date: 2005/05/06 08:31:19 $
 Pearu Peterson
-"""
 
-import __version__
-f2py_version = __version__.version
+"""
+from __future__ import division, absolute_import, print_function
 
 import sys
 import os
 import pprint
-import types
 import re
-errmess=sys.stderr.write
+
+from . import crackfortran
+from . import rules
+from . import cb_rules
+from . import auxfuncs
+from . import cfuncs
+from . import f90mod_rules
+from . import __version__
+
+f2py_version = __version__.version
+errmess = sys.stderr.write
 #outmess=sys.stdout.write
-show=pprint.pprint
-
-import crackfortran
-import rules
-import cb_rules
-import auxfuncs
-import cfuncs
-import f90mod_rules
-
+show = pprint.pprint
 outmess = auxfuncs.outmess
 
 try:
@@ -210,7 +210,7 @@ def scaninputline(inputline):
         elif l=='-h': f2=1
         elif l=='-m': f3=1
         elif l[:2]=='-v':
-            print f2py_version
+            print(f2py_version)
             sys.exit()
         elif l=='--show-compilers':
             f5=1
@@ -223,7 +223,7 @@ def scaninputline(inputline):
         elif l[:15] in '--include-paths':
             f7=1
         elif l[0]=='-':
-            errmess('Unknown option %s\n'%`l`)
+            errmess('Unknown option %s\n'%repr(l))
             sys.exit()
         elif f2: f2=0;signsfile=l
         elif f3: f3=0;modulename=l
@@ -240,7 +240,7 @@ def scaninputline(inputline):
         elif f==-1: skipfuncs.append(l)
         elif f==0: onlyfuncs.append(l)
     if not f5 and not files and not modulename:
-        print __usage__
+        print(__usage__)
         sys.exit()
     if not os.path.isdir(buildpath):
         if not verbose:
@@ -322,7 +322,7 @@ def buildmodules(lst):
     ret = {}
     for i in range(len(mnames)):
         if mnames[i] in isusedby:
-            outmess('\tSkipping module "%s" which is used by %s.\n'%(mnames[i],','.join(map(lambda s:'"%s"'%s,isusedby[mnames[i]]))))
+            outmess('\tSkipping module "%s" which is used by %s.\n'%(mnames[i],','.join(['"%s"'%s for s in isusedby[mnames[i]]])))
         else:
             um=[]
             if 'use' in modules[i]:
@@ -339,7 +339,7 @@ def dict_append(d_out,d_in):
     for (k,v) in d_in.items():
         if k not in d_out:
             d_out[k] = []
-        if type(v) is types.ListType:
+        if isinstance(v, list):
             d_out[k] = d_out[k] + v
         else:
             d_out[k].append(v)
@@ -370,7 +370,7 @@ def run_main(comline_list):
         if postlist[i]['block']=='python module' and '__user__' in postlist[i]['name']:
             if postlist[i]['name'] in isusedby:
                 #if not quiet:
-                outmess('Skipping Makefile build for module "%s" which is used by %s\n'%(postlist[i]['name'],','.join(map(lambda s:'"%s"'%s,isusedby[postlist[i]['name']]))))
+                outmess('Skipping Makefile build for module "%s" which is used by %s\n'%(postlist[i]['name'],','.join(['"%s"'%s for s in isusedby[postlist[i]['name']]])))
     if 'signsfile' in options:
         if options['verbose']>1:
             outmess('Stopping. Edit the signature file and then run f2py on the signature file: ')
@@ -380,7 +380,7 @@ def run_main(comline_list):
         if postlist[i]['block']!='python module':
             if 'python module' not in options:
                 errmess('Tip: If your original code is Fortran source then you must use -m option.\n')
-            raise TypeError('All blocks must be python module blocks but got %s'%(`postlist[i]['block']`))
+            raise TypeError('All blocks must be python module blocks but got %s'%(repr(postlist[i]['block'])))
     auxfuncs.debugoptions=options['debug']
     f90mod_rules.options=options
     auxfuncs.wrapfuncs=options['wrapfuncs']
@@ -430,13 +430,15 @@ def run_compile():
         remove_build_dir = 1
         build_dir = os.path.join(tempfile.mktemp())
 
-    sysinfo_flags = filter(re.compile(r'[-][-]link[-]').match,sys.argv[1:])
-    sys.argv = filter(lambda a,flags=sysinfo_flags:a not in flags,sys.argv)
+    _reg1 = re.compile(r'[-][-]link[-]')
+    sysinfo_flags = [_m for _m in sys.argv[1:] if _reg1.match(_m)]
+    sys.argv = [_m for _m in sys.argv if _m not in sysinfo_flags]
     if sysinfo_flags:
         sysinfo_flags = [f[7:] for f in sysinfo_flags]
 
-    f2py_flags = filter(re.compile(r'[-][-]((no[-]|)(wrap[-]functions|lower)|debug[-]capi|quiet)|[-]include').match,sys.argv[1:])
-    sys.argv = filter(lambda a,flags=f2py_flags:a not in flags,sys.argv)
+    _reg2 = re.compile(r'[-][-]((no[-]|)(wrap[-]functions|lower)|debug[-]capi|quiet)|[-]include')
+    f2py_flags = [_m for _m in sys.argv[1:] if _reg2.match(_m)]
+    sys.argv = [_m for _m in sys.argv if _m not in f2py_flags]
     f2py_flags2 = []
     fl = 0
     for a in sys.argv[1:]:
@@ -450,12 +452,13 @@ def run_compile():
         f2py_flags2.append(':')
     f2py_flags.extend(f2py_flags2)
 
-    sys.argv = filter(lambda a,flags=f2py_flags2:a not in flags,sys.argv)
-
-    flib_flags = filter(re.compile(r'[-][-]((f(90)?compiler([-]exec|)|compiler)=|help[-]compiler)').match,sys.argv[1:])
-    sys.argv = filter(lambda a,flags=flib_flags:a not in flags,sys.argv)
-    fc_flags = filter(re.compile(r'[-][-]((f(77|90)(flags|exec)|opt|arch)=|(debug|noopt|noarch|help[-]fcompiler))').match,sys.argv[1:])
-    sys.argv = filter(lambda a,flags=fc_flags:a not in flags,sys.argv)
+    sys.argv = [_m for _m in sys.argv if _m not in f2py_flags2]
+    _reg3 = re.compile(r'[-][-]((f(90)?compiler([-]exec|)|compiler)=|help[-]compiler)')
+    flib_flags = [_m for _m in sys.argv[1:] if _reg3.match(_m)]
+    sys.argv = [_m for _m in sys.argv if _m not in flib_flags]
+    _reg4 = re.compile(r'[-][-]((f(77|90)(flags|exec)|opt|arch)=|(debug|noopt|noarch|help[-]fcompiler))')
+    fc_flags = [_m for _m in sys.argv[1:] if _reg4.match(_m)]
+    sys.argv = [_m for _m in sys.argv if _m not in fc_flags]
 
     if 1:
         del_list = []
@@ -464,7 +467,7 @@ def run_compile():
             if s[:len(v)]==v:
                 from numpy.distutils import fcompiler
                 fcompiler.load_all_fcompiler_classes()
-                allowed_keys = fcompiler.fcompiler_class.keys()
+                allowed_keys = list(fcompiler.fcompiler_class.keys())
                 nv = ov = s[len(v):].lower()
                 if ov not in allowed_keys:
                     vmap = {} # XXX
@@ -472,7 +475,7 @@ def run_compile():
                         nv = vmap[ov]
                     except KeyError:
                         if ov not in vmap.values():
-                            print 'Unknown vendor: "%s"' % (s[len(v):])
+                            print('Unknown vendor: "%s"' % (s[len(v):]))
                     nv = ov
                 i = flib_flags.index(s)
                 flib_flags[i] = '--fcompiler=' + nv
@@ -480,9 +483,12 @@ def run_compile():
         for s in del_list:
             i = flib_flags.index(s)
             del flib_flags[i]
-        assert len(flib_flags)<=2,`flib_flags`
-    setup_flags = filter(re.compile(r'[-][-](verbose)').match,sys.argv[1:])
-    sys.argv = filter(lambda a,flags=setup_flags:a not in flags,sys.argv)
+        assert len(flib_flags)<=2,repr(flib_flags)
+
+    _reg5 = re.compile(r'[-][-](verbose)')
+    setup_flags = [_m for _m in sys.argv[1:] if _reg5.match(_m)]
+    sys.argv = [_m for _m in sys.argv if _m not in setup_flags]
+
     if '--quiet' in f2py_flags:
         setup_flags.append('--quiet')
 
@@ -525,7 +531,7 @@ def run_compile():
         if len(name_value)==2:
             define_macros[i] = tuple(name_value)
         else:
-            print 'Invalid use of -D:',name_value
+            print('Invalid use of -D:',name_value)
 
     from numpy.distutils.system_info import get_info
 
@@ -557,7 +563,7 @@ def run_compile():
             i = get_info(n)
             if not i:
                 outmess('No %s resources found in system'\
-                        ' (try `f2py --help-link`)\n' % (`n`))
+                        ' (try `f2py --help-link`)\n' % (repr(n)))
             dict_append(ext_args,**i)
 
     ext = Extension(**ext_args)

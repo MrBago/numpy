@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import numpy as np
 from numpy.testing import TestCase
 
@@ -43,7 +45,7 @@ def _indices(ndims):
     # no itertools.product available in Py2.4
 
     res = [[]]
-    for i in xrange(ndims):
+    for i in range(ndims):
         newres = []
         for elem in ind:
             for others in res:

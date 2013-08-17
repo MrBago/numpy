@@ -3,30 +3,32 @@
 
 :author: Pierre Gerard-Marchant
 :contact: pierregm_at_uga_dot_edu
+
 """
-__author__ = "Pierre GF Gerard-Marchant ($Author: jarrod.millman $)"
-__revision__ = "$Revision: 3473 $"
-__date__     = '$Date: 2007-10-29 17:18:13 +0200 (Mon, 29 Oct 2007) $'
+from __future__ import division, absolute_import, print_function
 
 import sys
+import warnings
+import pickle
+
 import numpy as np
+import numpy.ma.testutils
+import numpy.ma as ma
 from numpy import recarray
 from numpy.core.records import fromrecords as recfromrecords, \
                                fromarrays as recfromarrays
 
 from numpy.compat import asbytes, asbytes_nested
-
-import numpy.ma.testutils
 from numpy.ma.testutils import *
-
-import numpy.ma as ma
 from numpy.ma import masked, nomask
-
-import warnings
-from numpy.testing.utils import WarningManager
-
 from numpy.ma.mrecords import MaskedRecords, mrecarray, fromarrays, \
                               fromtextfile, fromrecords, addfield
+
+
+__author__ = "Pierre GF Gerard-Marchant ($Author: jarrod.millman $)"
+__revision__ = "$Revision: 3473 $"
+__date__     = '$Date: 2007-10-29 17:18:13 +0200 (Mon, 29 Oct 2007) $'
+
 
 #..............................................................................
 class TestMRecords(TestCase):
@@ -139,15 +141,11 @@ class TestMRecords(TestCase):
         rdata = data.view(MaskedRecords)
         val = ma.array([10,20,30], mask=[1,0,0])
         #
-        warn_ctx = WarningManager()
-        warn_ctx.__enter__()
-        try:
+        with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             rdata['num'] = val
             assert_equal(rdata.num, val)
             assert_equal(rdata.num.mask, [1,0,0])
-        finally:
-            warn_ctx.__exit__()
 
     def test_set_fields_mask(self):
         "Tests setting the mask of a field."
@@ -290,11 +288,10 @@ class TestMRecords(TestCase):
     #
     def test_pickling(self):
         "Test pickling"
-        import cPickle
         base = self.base.copy()
         mrec = base.view(mrecarray)
-        _ = cPickle.dumps(mrec)
-        mrec_ = cPickle.loads(_)
+        _ = pickle.dumps(mrec)
+        mrec_ = pickle.loads(_)
         assert_equal(mrec_.dtype, mrec.dtype)
         assert_equal_records(mrec_._data, mrec._data)
         assert_equal(mrec_._mask, mrec._mask)
@@ -358,10 +355,10 @@ class TestView(TestCase):
     def setUp(self):
         (a, b) = (np.arange(10), np.random.rand(10))
         ndtype = [('a',np.float), ('b',np.float)]
-        arr = np.array(zip(a,b), dtype=ndtype)
+        arr = np.array(list(zip(a,b)), dtype=ndtype)
         rec = arr.view(np.recarray)
         #
-        marr = ma.array(zip(a,b), dtype=ndtype, fill_value=(-9., -99.))
+        marr = ma.array(list(zip(a,b)), dtype=ndtype, fill_value=(-9., -99.))
         mrec = fromarrays([a,b], dtype=ndtype, fill_value=(-9., -99.))
         mrec.mask[3] = (False, True)
         self.data = (mrec, a, b, arr)
@@ -378,7 +375,7 @@ class TestView(TestCase):
         ntype = (np.float, 2)
         test = mrec.view(ntype)
         self.assertTrue(isinstance(test, ma.MaskedArray))
-        assert_equal(test, np.array(zip(a,b), dtype=np.float))
+        assert_equal(test, np.array(list(zip(a,b)), dtype=np.float))
         self.assertTrue(test[3,1] is ma.masked)
     #
     def test_view_flexible_type(self):

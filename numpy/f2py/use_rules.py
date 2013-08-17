@@ -13,7 +13,9 @@ terms of the NumPy License.
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Date: 2000/09/10 12:35:43 $
 Pearu Peterson
+
 """
+from __future__ import division, absolute_import, print_function
 
 __version__ = "$Revision: 1.3 $"[10:-1]
 
@@ -25,7 +27,7 @@ errmess=sys.stderr.write
 outmess=sys.stdout.write
 show=pprint.pprint
 
-from auxfuncs import *
+from .auxfuncs import *
 ##############
 
 usemodule_rules={
@@ -97,11 +99,11 @@ def buildusevar(name,realname,vars,usemodulename):
     nummap={0:'Ro',1:'Ri',2:'Rii',3:'Riii',4:'Riv',5:'Rv',6:'Rvi',7:'Rvii',8:'Rviii',9:'Rix'}
     vrd['texnamename']=name
     for i in nummap.keys():
-        vrd['texnamename']=vrd['texnamename'].replace(`i`,nummap[i])
+        vrd['texnamename']=vrd['texnamename'].replace(repr(i),nummap[i])
     if hasnote(vars[realname]): vrd['note']=vars[realname]['note']
     rd=dictappend({},vrd)
     var=vars[realname]
 
-    print name,realname,vars[realname]
+    print(name,realname,vars[realname])
     ret=applyrules(usemodule_rules,rd)
     return ret

@@ -11,7 +11,9 @@ file, like 'gcc', that is executed, and should be a string. In contrast,
 should be a list.
 
 But note that FCompiler.executables is actually a dictionary of commands.
+
 """
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['FCompiler','new_fcompiler','show_fcompilers',
            'dummy_fortran_file']
@@ -540,7 +542,7 @@ class FCompiler(CCompiler):
     def dump_properties(self):
         """Print out the attributes of a compiler instance."""
         props = []
-        for key in self.executables.keys() + \
+        for key in list(self.executables.keys()) + \
                 ['version','libraries','library_dirs',
                  'object_switch','compile_switch']:
             if hasattr(self,key):
@@ -969,7 +971,7 @@ def get_f77flags(src):
     flags = {}
     f = open_latin1(src,'r')
     i = 0
-    for line in f.readlines():
+    for line in f:
         i += 1
         if i>20: break
         m = _f77flags_re.match(line)

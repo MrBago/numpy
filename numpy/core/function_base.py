@@ -1,7 +1,9 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['logspace', 'linspace']
 
-import numeric as _nx
-from numeric import array
+from . import numeric as _nx
+from .numeric import array
 
 def linspace(start, stop, num=50, endpoint=True, retstep=False):
     """

@@ -106,9 +106,9 @@ check the last section as well)
  HDF5: PyTables
  FITS: PyFITS
 
-Examples of formats that cannot be read directly but for which it is not hard
-to convert are libraries like PIL (able to read and write many image formats
-such as jpg, png, etc).
+Examples of formats that cannot be read directly but for which it is not hard to
+convert are those formats supported by libraries like PIL (able to read and
+write many image formats such as jpg, png, etc).
 
 Common ASCII Formats
 ------------------------
@@ -141,3 +141,5 @@ random values, and some utility functions to generate special matrices (e.g.
 diagonal).
 
 """
+from __future__ import division, absolute_import, print_function
+

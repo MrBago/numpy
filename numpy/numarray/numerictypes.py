@@ -25,7 +25,12 @@ Exported symbols include:
       ComplexType
 
 $Id: numerictypes.py,v 1.55 2005/12/01 16:22:03 jaytmiller Exp $
+
 """
+from __future__ import division, absolute_import, print_function
+
+import numpy
+from numpy.compat import long
 
 __all__ = ['NumericType','HasUInt64','typeDict','IsType',
            'BooleanType', 'SignedType', 'UnsignedType', 'IntegralType',
@@ -42,7 +47,6 @@ __all__ = ['NumericType','HasUInt64','typeDict','IsType',
 MAX_ALIGN = 8
 MAX_INT_SIZE = 8
 
-import numpy
 LP64 = numpy.intp(0).itemsize == 8
 
 HasUInt64 = 1

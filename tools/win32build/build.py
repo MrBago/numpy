@@ -1,11 +1,15 @@
 """Python script to build windows binaries to be fed to the "superpack".
 
 The script is pretty dumb: it assumes python executables are installed the
-standard way, and the location for blas/lapack/atlas is harcoded."""
+standard way, and the location for blas/lapack/atlas is harcoded.
 
-# TODO:
-#  - integrate the x86analysis script to check built binaries
-#  - make the config configurable with a file
+TODO:
+    - integrate the x86analysis script to check built binaries
+    - make the config configurable with a file
+
+"""
+from __future__ import division, print_function
+
 import sys
 import subprocess
 import os
@@ -47,7 +51,7 @@ def write_site_cfg(arch):
     f.close()
 
 def build(arch, pyver):
-    print "Building numpy binary for python %s, arch is %s" % (get_python_exec(pyver), arch)
+    print("Building numpy binary for python %s, arch is %s" % (get_python_exec(pyver), arch))
     get_clean()
     write_site_cfg(arch)
 
@@ -84,8 +88,12 @@ def move_binary(arch, pyver):
             os.path.join("binaries", get_binary_name(arch)))
 
 def get_numpy_version():
-    import __builtin__
-    __builtin__.__NUMPY_SETUP__ = True
+    if sys.version_info[0] >= 3:
+        import builtins
+    else:
+        import __builtin__ as builtins
+
+    builtins.__NUMPY_SETUP__ = True
     from numpy.version import version
     return version
 

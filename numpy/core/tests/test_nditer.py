@@ -1,10 +1,13 @@
-import numpy as np
-from numpy import array, arange, nditer, all
-from numpy.compat import asbytes
-from numpy.testing import *
+from __future__ import division, absolute_import, print_function
+
 import sys, warnings
 
-import warnings
+import numpy as np
+from numpy import array, arange, nditer, all
+from numpy.compat import asbytes, sixu
+from numpy.testing import *
+
+
 
 def iter_multi_index(i):
     ret = []
@@ -598,6 +601,8 @@ def test_iter_itershape():
                             [['readonly'], ['writeonly','allocate']],
                             op_axes=[[0,1,None], None],
                             itershape=(-1,1,4))
+    # Test bug that for no op_axes but itershape, they are NULLed correctly
+    i = np.nditer([np.ones(2), None, None], itershape=(2,))
 
 def test_iter_broadcasting_errors():
     # Check that errors are thrown for bad broadcasting shapes
@@ -1206,7 +1211,8 @@ def test_iter_copy():
     assert_equal([x[()] for x in i], [x[()] for x in j])
 
     i.iterrange = (2,18)
-    i.next(); i.next()
+    next(i)
+    next(i)
     j = i.copy()
     assert_equal([x[()] for x in i], [x[()] for x in j])
 
@@ -1431,32 +1437,32 @@ def test_iter_iterindex():
     a = arange(24).reshape(4,3,2)
     for flags in ([], ['buffered']):
         i = nditer(a, flags, buffersize=buffersize)
-        assert_equal(iter_iterindices(i), range(24))
+        assert_equal(iter_iterindices(i), list(range(24)))
         i.iterindex = 2
-        assert_equal(iter_iterindices(i), range(2,24))
+        assert_equal(iter_iterindices(i), list(range(2,24)))
 
         i = nditer(a, flags, order='F', buffersize=buffersize)
-        assert_equal(iter_iterindices(i), range(24))
+        assert_equal(iter_iterindices(i), list(range(24)))
         i.iterindex = 5
-        assert_equal(iter_iterindices(i), range(5,24))
+        assert_equal(iter_iterindices(i), list(range(5,24)))
 
         i = nditer(a[::-1], flags, order='F', buffersize=buffersize)
-        assert_equal(iter_iterindices(i), range(24))
+        assert_equal(iter_iterindices(i), list(range(24)))
         i.iterindex = 9
-        assert_equal(iter_iterindices(i), range(9,24))
+        assert_equal(iter_iterindices(i), list(range(9,24)))
 
         i = nditer(a[::-1,::-1], flags, order='C', buffersize=buffersize)
-        assert_equal(iter_iterindices(i), range(24))
+        assert_equal(iter_iterindices(i), list(range(24)))
         i.iterindex = 13
-        assert_equal(iter_iterindices(i), range(13,24))
+        assert_equal(iter_iterindices(i), list(range(13,24)))
 
         i = nditer(a[::1,::-1], flags, buffersize=buffersize)
-        assert_equal(iter_iterindices(i), range(24))
+        assert_equal(iter_iterindices(i), list(range(24)))
         i.iterindex = 23
-        assert_equal(iter_iterindices(i), range(23,24))
+        assert_equal(iter_iterindices(i), list(range(23,24)))
         i.reset()
         i.iterindex = 2
-        assert_equal(iter_iterindices(i), range(2,24))
+        assert_equal(iter_iterindices(i), list(range(2,24)))
 
 def test_iter_iterrange():
     # Make sure getting and resetting the iterrange works
@@ -1568,7 +1574,7 @@ def test_iter_buffering_delayed_alloc():
     assert_equal(i[0], 0)
     i[1] = 1
     assert_equal(i[0:2], [0,1])
-    assert_equal([[x[0][()],x[1][()]] for x in i], zip(range(6), [1]*6))
+    assert_equal([[x[0][()],x[1][()]] for x in i], list(zip(range(6), [1]*6)))
 
 def test_iter_buffered_cast_simple():
     # Test that buffering can handle a simple cast
@@ -1800,7 +1806,7 @@ def test_iter_buffered_cast_subarray():
                     casting='unsafe',
                     op_dtypes=sdt2)
     assert_equal(i[0].dtype, np.dtype(sdt2))
-    for x, count in zip(i, range(6)):
+    for x, count in zip(i, list(range(6))):
         assert_(np.all(x['a'] == count))
 
     # one element -> many -> back (copies it to all)
@@ -2002,7 +2008,7 @@ def test_iter_buffering_string():
     assert_raises(TypeError,nditer,a,['buffered'],['readonly'],
                     op_dtypes='U2')
     i = nditer(a, ['buffered'], ['readonly'], op_dtypes='U6')
-    assert_equal(i[0], u'abc')
+    assert_equal(i[0], sixu('abc'))
     assert_equal(i[0].dtype, np.dtype('U6'))
 
 def test_iter_buffering_growinner():
@@ -2012,6 +2018,57 @@ def test_iter_buffering_growinner():
                            buffersize=5)
     # Should end up with just one inner loop here
     assert_equal(i[0].size, a.size)
+
+
+@dec.slow
+def test_iter_buffered_reduce_reuse():
+    # large enough array for all views, including negative strides.
+    a = np.arange(2*3**5)[3**5:3**5+1]
+    flags = ['buffered', 'delay_bufalloc', 'multi_index', 'reduce_ok', 'refs_ok']
+    op_flags = [('readonly',), ('readwrite','allocate')]
+    op_axes_list = [[(0,1,2), (0,1,-1)], [(0,1,2), (0,-1,-1)]]
+    # wrong dtype to force buffering
+    op_dtypes = [np.float, a.dtype]
+
+    def get_params():
+        for xs in range(-3**2, 3**2 + 1):
+            for ys in range(xs, 3**2 + 1):
+                for op_axes in op_axes_list:
+                    # last stride is reduced and because of that not
+                    # important for this test, as it is the inner stride.
+                    strides = (xs * a.itemsize, ys * a.itemsize, a.itemsize)
+                    arr = np.lib.stride_tricks.as_strided(a, (3,3,3), strides)
+
+                    for skip in [0, 1]:
+                        yield arr, op_axes, skip
+
+    for arr, op_axes, skip in get_params():
+        nditer2 = np.nditer([arr.copy(), None],
+                            op_axes=op_axes, flags=flags, op_flags=op_flags,
+                            op_dtypes=op_dtypes)
+        nditer2.operands[-1][...] = 0
+        nditer2.reset()
+        nditer2.iterindex = skip
+
+        for (a2_in, b2_in) in nditer2:
+            b2_in += a2_in.astype(np.int_)
+
+        comp_res = nditer2.operands[-1]
+
+        for bufsize in range(0, 3**3):
+            nditer1 = np.nditer([arr, None],
+                                op_axes=op_axes, flags=flags, op_flags=op_flags,
+                                buffersize=bufsize, op_dtypes=op_dtypes)
+            nditer1.operands[-1][...] = 0
+            nditer1.reset()
+            nditer1.iterindex = skip
+
+            for (a1_in, b1_in) in nditer1:
+                b1_in += a1_in.astype(np.int_)
+
+            res = nditer1.operands[-1]
+            assert_array_equal(res, comp_res)
+
 
 def test_iter_no_broadcast():
     # Test that the no_broadcast flag works
@@ -2467,6 +2524,60 @@ def test_iter_allocated_array_dtypes():
         c[1,0] = a * b
         c[1,1] = a / b
     assert_equal(it.operands[2], [[8, 12], [20, 5]])
+
+
+def test_0d_iter():
+    # Basic test for iteration of 0-d arrays:
+    i = nditer([2, 3], ['multi_index'], [['readonly']]*2)
+    assert_equal(i.ndim, 0)
+    assert_equal(next(i), (2, 3))
+    assert_equal(i.multi_index, ())
+    assert_equal(i.iterindex, 0)
+    assert_raises(StopIteration, next, i)
+    # test reset:
+    i.reset()
+    assert_equal(next(i), (2, 3))
+    assert_raises(StopIteration, next, i)
+
+    # test forcing to 0-d
+    i = nditer(np.arange(5), ['multi_index'], [['readonly']], op_axes=[()])
+    assert_equal(i.ndim, 0)
+    assert_equal(len(i), 1)
+    # note that itershape=(), still behaves like None due to the conversions
+
+    # Test a more complex buffered casting case (same as another test above)
+    sdt = [('a', 'f4'), ('b', 'i8'), ('c', 'c8', (2,3)), ('d', 'O')]
+    a = np.array(0.5, dtype='f4')
+    i = nditer(a, ['buffered','refs_ok'], ['readonly'],
+                    casting='unsafe', op_dtypes=sdt)
+    vals = next(i)
+    assert_equal(vals['a'], 0.5)
+    assert_equal(vals['b'], 0)
+    assert_equal(vals['c'], [[(0.5)]*3]*2)
+    assert_equal(vals['d'], 0.5)
+
+
+def test_0d_nested_iter():
+    a = np.arange(12).reshape(2,3,2)
+    i, j = np.nested_iters(a, [[],[1,0,2]])
+    vals = []
+    for x in i:
+        vals.append([y for y in j])
+    assert_equal(vals, [[0,1,2,3,4,5,6,7,8,9,10,11]])
+
+    i, j = np.nested_iters(a, [[1,0,2],[]])
+    vals = []
+    for x in i:
+        vals.append([y for y in j])
+    assert_equal(vals, [[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11]])
+
+    i, j, k = np.nested_iters(a, [[2,0], [] ,[1]])
+    vals = []
+    for x in i:
+        for y in j:
+            vals.append([z for z in k])
+    assert_equal(vals, [[0,2,4],[1,3,5],[6,8,10],[7,9,11]])
+
 
 if __name__ == "__main__":
     run_module_suite()

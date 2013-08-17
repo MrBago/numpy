@@ -95,7 +95,6 @@ NpyIter_GlobalFlagsConverter(PyObject *flags_in, npy_uint32 *flags)
     npy_uint32 flag;
 
     if (flags_in == NULL || flags_in == Py_None) {
-        *flags = 0;
         return 1;
     }
 
@@ -526,7 +525,7 @@ npyiter_convert_op_axes(PyObject *op_axes_in, npy_intp nop,
         return 0;
     }
 
-    *oa_ndim = 0;
+    *oa_ndim = -1;
 
     /* Copy the tuples into op_axes */
     for (iop = 0; iop < nop; ++iop) {
@@ -545,13 +544,8 @@ npyiter_convert_op_axes(PyObject *op_axes_in, npy_intp nop,
                 Py_DECREF(a);
                 return 0;
             }
-            if (*oa_ndim == 0) {
+            if (*oa_ndim == -1) {
                 *oa_ndim = PySequence_Size(a);
-                if (*oa_ndim == 0) {
-                    PyErr_SetString(PyExc_ValueError,
-                            "op_axes must have at least one dimension");
-                    return 0;
-                }
                 if (*oa_ndim > NPY_MAXDIMS) {
                     PyErr_SetString(PyExc_ValueError,
                             "Too many dimensions in op_axes");
@@ -575,7 +569,7 @@ npyiter_convert_op_axes(PyObject *op_axes_in, npy_intp nop,
                     op_axes[iop][idim] = -1;
                 }
                 else {
-                    op_axes[iop][idim] = PyInt_AsLong(v);
+                    op_axes[iop][idim] = PyArray_PyIntAsInt(v);
                     if (op_axes[iop][idim]==-1 &&
                                                 PyErr_Occurred()) {
                         Py_DECREF(a);
@@ -589,7 +583,7 @@ npyiter_convert_op_axes(PyObject *op_axes_in, npy_intp nop,
         }
     }
 
-    if (*oa_ndim == 0) {
+    if (*oa_ndim == -1) {
         PyErr_SetString(PyExc_ValueError,
                 "If op_axes is provided, at least one list of axes "
                 "must be contained within it");
@@ -726,7 +720,7 @@ npyiter_init(NewNpyArrayIterObject *self, PyObject *args, PyObject *kwds)
     NPY_CASTING casting = NPY_SAFE_CASTING;
     npy_uint32 op_flags[NPY_MAXARGS];
     PyArray_Descr *op_request_dtypes[NPY_MAXARGS];
-    int oa_ndim = 0;
+    int oa_ndim = -1;
     int op_axes_arrays[NPY_MAXARGS][NPY_MAXDIMS];
     int *op_axes[NPY_MAXARGS];
     PyArray_Dims itershape = {NULL, 0};
@@ -784,9 +778,9 @@ npyiter_init(NewNpyArrayIterObject *self, PyObject *args, PyObject *kwds)
     }
 
     if (itershape.len > 0) {
-        if (oa_ndim == 0) {
+        if (oa_ndim == -1) {
             oa_ndim = itershape.len;
-            memset(op_axes, 0, sizeof(op_axes[0])*oa_ndim);
+            memset(op_axes, 0, sizeof(op_axes[0]) * nop);
         }
         else if (oa_ndim != itershape.len) {
             PyErr_SetString(PyExc_ValueError,
@@ -800,10 +794,9 @@ npyiter_init(NewNpyArrayIterObject *self, PyObject *args, PyObject *kwds)
         itershape.ptr = NULL;
     }
 
-
     self->iter = NpyIter_AdvancedNew(nop, op, flags, order, casting, op_flags,
                                   op_request_dtypes,
-                                  oa_ndim, oa_ndim > 0 ? op_axes : NULL,
+                                  oa_ndim, oa_ndim >= 0 ? op_axes : NULL,
                                   itershape.ptr,
                                   buffersize);
 
@@ -860,7 +853,7 @@ NpyIter_NestedIters(PyObject *NPY_UNUSED(self),
 
     int iop, nop = 0, inest, nnest = 0;
     PyArrayObject *op[NPY_MAXARGS];
-    npy_uint32 flags = 0, flags_inner = 0;
+    npy_uint32 flags = 0, flags_inner;
     NPY_ORDER order = NPY_KEEPORDER;
     NPY_CASTING casting = NPY_SAFE_CASTING;
     npy_uint32 op_flags[NPY_MAXARGS], op_flags_inner[NPY_MAXARGS];
@@ -1754,11 +1747,7 @@ static PyObject *npyiter_iterrange_get(NewNpyArrayIterObject *self)
 
 static int npyiter_iterrange_set(NewNpyArrayIterObject *self, PyObject *value)
 {
-#if PY_VERSION_HEX >= 0x02050000
     npy_intp istart = 0, iend = 0;
-#else
-    long istart = 0, iend = 0;
-#endif
 
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -1771,11 +1760,7 @@ static int npyiter_iterrange_set(NewNpyArrayIterObject *self, PyObject *value)
         return -1;
     }
 
-#if PY_VERSION_HEX >= 0x02050000
     if (!PyArg_ParseTuple(value, "nn", &istart, &iend)) {
-#else
-    if (!PyArg_ParseTuple(value, "ll", &istart, &iend)) {
-#endif
         return -1;
     }
 
@@ -2320,16 +2305,30 @@ npyiter_ass_subscript(NewNpyArrayIterObject *self, PyObject *op,
 }
 
 static PyMethodDef npyiter_methods[] = {
-    {"reset", (PyCFunction)npyiter_reset, METH_NOARGS, NULL},
-    {"copy", (PyCFunction)npyiter_copy, METH_NOARGS, NULL},
-    {"__copy__", (PyCFunction)npyiter_copy, METH_NOARGS, NULL},
-    {"iternext", (PyCFunction)npyiter_iternext, METH_NOARGS, NULL},
-    {"remove_axis", (PyCFunction)npyiter_remove_axis, METH_VARARGS, NULL},
-    {"remove_multi_index", (PyCFunction)npyiter_remove_multi_index,
-                METH_NOARGS, NULL},
-    {"enable_external_loop", (PyCFunction)npyiter_enable_external_loop,
-                METH_NOARGS, NULL},
-    {"debug_print", (PyCFunction)npyiter_debug_print, METH_NOARGS, NULL},
+    {"reset",
+        (PyCFunction)npyiter_reset,
+        METH_NOARGS, NULL},
+    {"copy",
+        (PyCFunction)npyiter_copy,
+        METH_NOARGS, NULL},
+    {"__copy__",
+        (PyCFunction)npyiter_copy,
+        METH_NOARGS, NULL},
+    {"iternext",
+        (PyCFunction)npyiter_iternext,
+        METH_NOARGS, NULL},
+    {"remove_axis",
+        (PyCFunction)npyiter_remove_axis,
+        METH_VARARGS, NULL},
+    {"remove_multi_index",
+        (PyCFunction)npyiter_remove_multi_index,
+        METH_NOARGS, NULL},
+    {"enable_external_loop",
+        (PyCFunction)npyiter_enable_external_loop,
+        METH_NOARGS, NULL},
+    {"debug_print",
+        (PyCFunction)npyiter_debug_print,
+        METH_NOARGS, NULL},
     {NULL, NULL, 0, NULL},
 };
 
@@ -2398,7 +2397,6 @@ static PyGetSetDef npyiter_getsets[] = {
 };
 
 NPY_NO_EXPORT PySequenceMethods npyiter_as_sequence = {
-#if PY_VERSION_HEX >= 0x02050000
     (lenfunc)npyiter_seq_length,            /*sq_length*/
     (binaryfunc)NULL,                       /*sq_concat*/
     (ssizeargfunc)NULL,                     /*sq_repeat*/
@@ -2409,26 +2407,10 @@ NPY_NO_EXPORT PySequenceMethods npyiter_as_sequence = {
     (objobjproc)NULL,                       /*sq_contains */
     (binaryfunc)NULL,                       /*sq_inplace_concat */
     (ssizeargfunc)NULL,                     /*sq_inplace_repeat */
-#else
-    (inquiry)npyiter_seq_length,            /*sq_length*/
-    (binaryfunc)NULL,                       /*sq_concat is handled by nb_add*/
-    (intargfunc)NULL,                       /*sq_repeat is handled nb_multiply*/
-    (intargfunc)npyiter_seq_item,           /*sq_item*/
-    (intintargfunc)npyiter_seq_slice,       /*sq_slice*/
-    (intobjargproc)npyiter_seq_ass_item,    /*sq_ass_item*/
-    (intintobjargproc)npyiter_seq_ass_slice,/*sq_ass_slice*/
-    (objobjproc)NULL,                       /*sq_contains */
-    (binaryfunc)NULL,                       /*sg_inplace_concat */
-    (intargfunc)NULL                        /*sg_inplace_repeat */
-#endif
 };
 
 NPY_NO_EXPORT PyMappingMethods npyiter_as_mapping = {
-#if PY_VERSION_HEX >= 0x02050000
     (lenfunc)npyiter_seq_length,          /*mp_length*/
-#else
-    (inquiry)npyiter_seq_length,          /*mp_length*/
-#endif
     (binaryfunc)npyiter_subscript,        /*mp_subscript*/
     (objobjargproc)npyiter_ass_subscript, /*mp_ass_subscript*/
 };
@@ -2490,7 +2472,5 @@ NPY_NO_EXPORT PyTypeObject NpyIter_Type = {
     0,                                          /* tp_subclasses */
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
-#if PY_VERSION_HEX >= 0x02060000
     0,                                          /* tp_version_tag */
-#endif
 };

@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
 if 'setuptools' in sys.modules:
     import setuptools.command.install as old_install_mod
@@ -62,7 +64,7 @@ class install(old_install):
             f = open(self.record,'r')
             lines = []
             need_rewrite = False
-            for l in f.readlines():
+            for l in f:
                 l = l.rstrip()
                 if ' ' in l:
                     need_rewrite = True

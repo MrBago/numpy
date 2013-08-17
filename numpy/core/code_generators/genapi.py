@@ -4,7 +4,10 @@ Get API information encoded in C files.
 See ``find_function`` for how functions should be formatted, and
 ``read_order`` for how the order of the functions should be
 specified.
+
 """
+from __future__ import division, absolute_import, print_function
+
 import sys, os, re
 try:
     import hashlib
@@ -12,8 +15,7 @@ try:
 except ImportError:
     import md5
     md5new = md5.new
-if sys.version_info[:2] < (2, 6):
-    from sets import Set as set
+
 import textwrap
 
 from os.path import join
@@ -200,7 +202,7 @@ def find_functions(filename, tag='API'):
     function_name = None
     function_args = []
     doclist = []
-    SCANNING, STATE_DOC, STATE_RETTYPE, STATE_NAME, STATE_ARGS = range(5)
+    SCANNING, STATE_DOC, STATE_RETTYPE, STATE_NAME, STATE_ARGS = list(range(5))
     state = SCANNING
     tagcomment = '/*' + tag
     for lineno, line in enumerate(fo):
@@ -251,7 +253,7 @@ def find_functions(filename, tag='API'):
                 else:
                     function_args.append(line)
         except:
-            print(filename, lineno+1)
+            print(filename, lineno + 1)
             raise
     fo.close()
     return functions
@@ -383,7 +385,7 @@ NPY_NO_EXPORT %s %s \\\n       (%s);""" % (self.return_type,
 
 def order_dict(d):
     """Order dict by its values."""
-    o = d.items()
+    o = list(d.items())
     def _key(x):
         return (x[1], x[0])
     return sorted(o, key=_key)
@@ -462,7 +464,7 @@ def get_versions_hash():
     file = os.path.join(os.path.dirname(__file__), 'cversions.txt')
     fid = open(file, 'r')
     try:
-        for line in fid.readlines():
+        for line in fid:
             m = VERRE.match(line)
             if m:
                 d.append((int(m.group(1), 16), m.group(2)))
@@ -480,8 +482,8 @@ def main():
         print(func)
         ah = func.api_hash()
         m.update(ah)
-        print(hex(int(ah,16)))
-    print(hex(int(m.hexdigest()[:8],16)))
+        print(hex(int(ah, 16)))
+    print(hex(int(m.hexdigest()[:8], 16)))
 
 if __name__ == '__main__':
     main()

@@ -49,6 +49,7 @@ maintainer email:  oliphant.travis@ieee.org
 #include "getset.h"
 #include "sequence.h"
 #include "buffer.h"
+#include "array_assign.h"
 
 /*NUMPY_API
   Compute the size of an array (in number of items)
@@ -704,7 +705,7 @@ array_might_be_written(PyArrayObject *obj)
     const char *msg =
         "Numpy has detected that you (may be) writing to an array returned\n"
         "by numpy.diagonal or by selecting multiple fields in a record\n"
-        "array. This code will likely break in the next numpy release --\n"
+        "array. This code will likely break in a future numpy release --\n"
         "see numpy.diagonal or arrays.indexing reference docs for details.\n"
         "The quick fix is to make an explicit copy (e.g., do\n"
         "arr.diagonal().copy() or arr[['f0','f1']].copy()).";
@@ -1172,12 +1173,12 @@ _void_compare(PyArrayObject *self, PyArrayObject *other, int cmp_op)
             if NPY_TITLE_KEY(key, value) {
                 continue;
             }
-            a = PyArray_EnsureAnyArray(array_subscript(self, key));
+            a = array_subscript_asarray(self, key);
             if (a == NULL) {
                 Py_XDECREF(res);
                 return NULL;
             }
-            b = array_subscript(other, key);
+            b = array_subscript_asarray(other, key);
             if (b == NULL) {
                 Py_XDECREF(res);
                 Py_DECREF(a);
@@ -1264,7 +1265,6 @@ array_richcompare(PyArrayObject *self, PyObject *other, int cmp_op)
 {
     PyArrayObject *array_other;
     PyObject *result = NULL;
-    PyArray_Descr *dtype = NULL;
 
     switch (cmp_op) {
     case Py_LT:
@@ -1280,29 +1280,31 @@ array_richcompare(PyArrayObject *self, PyObject *other, int cmp_op)
             Py_INCREF(Py_False);
             return Py_False;
         }
-        /* Make sure 'other' is an array */
-        if (PyArray_TYPE(self) == NPY_OBJECT) {
-            dtype = PyArray_DTYPE(self);
-            Py_INCREF(dtype);
-        }
-        array_other = (PyArrayObject *)PyArray_FromAny(other, dtype, 0, 0, 0,
-                                                    NULL);
-        /*
-         * If not successful, indicate that the items cannot be compared
-         * this way.
-         */
-        if (array_other == NULL) {
-            PyErr_Clear();
-            Py_INCREF(Py_NotImplemented);
-            return Py_NotImplemented;
-        }
-
         result = PyArray_GenericBinaryFunction(self,
-                (PyObject *)array_other,
+                (PyObject *)other,
                 n_ops.equal);
-        if ((result == Py_NotImplemented) &&
-                (PyArray_TYPE(self) == NPY_VOID)) {
+        if (result && result != Py_NotImplemented)
+          break;
+
+        /*
+         * The ufunc does not support void/structured types, so these
+         * need to be handled specifically. Only a few cases are supported.
+         */
+
+        if (PyArray_TYPE(self) == NPY_VOID) {
             int _res;
+
+            array_other = (PyArrayObject *)PyArray_FromAny(other, NULL, 0, 0, 0,
+                                                           NULL);
+            /*
+             * If not successful, indicate that the items cannot be compared
+             * this way.
+             */
+            if (array_other == NULL) {
+                PyErr_Clear();
+                Py_INCREF(Py_NotImplemented);
+                return Py_NotImplemented;
+            }
 
             _res = PyObject_RichCompareBool
                 ((PyObject *)PyArray_DESCR(self),
@@ -1325,7 +1327,6 @@ array_richcompare(PyArrayObject *self, PyObject *other, int cmp_op)
          * two array objects can not be compared together;
          * indicate that
          */
-        Py_DECREF(array_other);
         if (result == NULL) {
             PyErr_Clear();
             Py_INCREF(Py_NotImplemented);
@@ -1337,28 +1338,30 @@ array_richcompare(PyArrayObject *self, PyObject *other, int cmp_op)
             Py_INCREF(Py_True);
             return Py_True;
         }
-        /* Make sure 'other' is an array */
-        if (PyArray_TYPE(self) == NPY_OBJECT) {
-            dtype = PyArray_DTYPE(self);
-            Py_INCREF(dtype);
-        }
-        array_other = (PyArrayObject *)PyArray_FromAny(other, dtype, 0, 0, 0,
-                                                    NULL);
-        /*
-         * If not successful, indicate that the items cannot be compared
-         * this way.
-         */
-        if (array_other == NULL) {
-            PyErr_Clear();
-            Py_INCREF(Py_NotImplemented);
-            return Py_NotImplemented;
-        }
-
-        result = PyArray_GenericBinaryFunction(self, (PyObject *)array_other,
+        result = PyArray_GenericBinaryFunction(self, (PyObject *)other,
                 n_ops.not_equal);
-        if ((result == Py_NotImplemented) &&
-                (PyArray_TYPE(self) == NPY_VOID)) {
+        if (result && result != Py_NotImplemented)
+          break;
+
+        /*
+         * The ufunc does not support void/structured types, so these
+         * need to be handled specifically. Only a few cases are supported.
+         */
+
+        if (PyArray_TYPE(self) == NPY_VOID) {
             int _res;
+
+            array_other = (PyArrayObject *)PyArray_FromAny(other, NULL, 0, 0, 0,
+                                                           NULL);
+            /*
+             * If not successful, indicate that the items cannot be compared
+             * this way.
+            */
+            if (array_other == NULL) {
+                PyErr_Clear();
+                Py_INCREF(Py_NotImplemented);
+                return Py_NotImplemented;
+            }
 
             _res = PyObject_RichCompareBool(
                     (PyObject *)PyArray_DESCR(self),
@@ -1377,7 +1380,6 @@ array_richcompare(PyArrayObject *self, PyObject *other, int cmp_op)
             return result;
         }
 
-        Py_DECREF(array_other);
         if (result == NULL) {
             PyErr_Clear();
             Py_INCREF(Py_NotImplemented);
@@ -1463,8 +1465,6 @@ NPY_NO_EXPORT npy_bool
 PyArray_CheckStrides(int elsize, int nd, npy_intp numbytes, npy_intp offset,
                      npy_intp *dims, npy_intp *newstrides)
 {
-    int i;
-    npy_intp max_axis_offset;
     npy_intp begin, end;
     npy_intp lower_offset;
     npy_intp upper_offset;
@@ -1694,8 +1694,6 @@ NPY_NO_EXPORT PyTypeObject PyArray_Type = {
     (Py_TPFLAGS_DEFAULT
 #if !defined(NPY_PY3K)
      | Py_TPFLAGS_CHECKTYPES
-#endif
-#if (PY_VERSION_HEX >= 0x02060000) && (PY_VERSION_HEX < 0x03000000)
      | Py_TPFLAGS_HAVE_NEWBUFFER
 #endif
      | Py_TPFLAGS_BASETYPE),                  /* tp_flags */
@@ -1726,7 +1724,5 @@ NPY_NO_EXPORT PyTypeObject PyArray_Type = {
     0,                                          /* tp_subclasses */
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
-#if PY_VERSION_HEX >= 0x02060000
     0,                                          /* tp_version_tag */
-#endif
 };

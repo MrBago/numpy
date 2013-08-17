@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['ravel_multi_index',
            'unravel_index',
            'mgrid',
@@ -14,9 +16,9 @@ from numpy.core.numeric import ( asarray, ScalarType, array, alltrue, cumprod,
 from numpy.core.numerictypes import find_common_type
 import math
 
-import function_base
+from . import function_base
 import numpy.matrixlib as matrix
-from function_base import diff
+from .function_base import diff
 from numpy.lib._compiled_base import ravel_multi_index, unravel_index
 from numpy.lib.stride_tricks import as_strided
 makemat = matrix.matrix
@@ -155,14 +157,14 @@ class nd_grid(object):
                     size.append(int(abs(step)))
                     typ = float
                 else:
-                    size.append(math.ceil((key[k].stop - start)/(step*1.0)))
+                    size.append(int(math.ceil((key[k].stop - start)/(step*1.0))))
                 if isinstance(step, float) or \
                     isinstance(start, float) or \
                     isinstance(key[k].stop, float):
                     typ = float
             if self.sparse:
-                nn = map(lambda x,t: _nx.arange(x, dtype=t), size, \
-                                     (typ,)*len(size))
+                nn = [_nx.arange(_x, dtype=_t)
+                        for _x, _t in zip(size, (typ,)*len(size))]
             else:
                 nn = _nx.indices(size, typ)
             for k in range(len(size)):
@@ -242,7 +244,7 @@ class AxisConcatenator(object):
             frame = sys._getframe().f_back
             mymat = matrix.bmat(key,frame.f_globals,frame.f_locals)
             return mymat
-        if type(key) is not tuple:
+        if not isinstance(key, tuple):
             key = (key,)
         objs = []
         scalars = []
@@ -250,7 +252,7 @@ class AxisConcatenator(object):
         scalartypes = []
         for k in range(len(key)):
             scalar = False
-            if type(key[k]) is slice:
+            if isinstance(key[k], slice):
                 step = key[k].step
                 start = key[k].start
                 stop = key[k].stop
@@ -305,7 +307,7 @@ class AxisConcatenator(object):
                         k2 = ndmin-tempobj.ndim
                         if (trans1d < 0):
                             trans1d += k2 + 1
-                        defaxes = range(ndmin)
+                        defaxes = list(range(ndmin))
                         k1 = trans1d
                         axes = defaxes[:k1] + defaxes[k2:] + \
                                defaxes[k1:k2]
@@ -485,7 +487,7 @@ class ndenumerate(object):
     def __init__(self, arr):
         self.iter = asarray(arr).flat
 
-    def next(self):
+    def __next__(self):
         """
         Standard iterator method, returns the index tuple and array value.
 
@@ -497,10 +499,13 @@ class ndenumerate(object):
             The array element of the current iteration.
 
         """
-        return self.iter.coords, self.iter.next()
+        return self.iter.coords, next(self.iter)
 
     def __iter__(self):
         return self
+
+    next = __next__
+
 
 class ndindex(object):
     """
@@ -531,29 +536,6 @@ class ndindex(object):
     (2, 1, 0)
 
     """
-    # This is a hack to handle 0-d arrays correctly.
-    # Fixing nditer would be more work but should be done eventually,
-    #  and then this entire __new__ method can be removed.
-    def __new__(cls, *shape):
-        if len(shape) == 1 and isinstance(shape[0], tuple):
-           shape = shape[0]
-        if len(shape) == 0:
-            class zero_dim_iter(object):
-                def __init__(self):
-                    self._N = 1
-                def __iter__(self):
-                    return self
-                def ndincr(self):
-                    self.next()
-                def next(self):
-                    if self._N > 0:
-                        self._N -= 1
-                        return ()
-                    raise StopIteration
-            return zero_dim_iter()
-        else:
-            return super(ndindex, cls).__new__(cls)
-            
     def __init__(self, *shape):
         if len(shape) == 1 and isinstance(shape[0], tuple):
             shape = shape[0]
@@ -562,16 +544,16 @@ class ndindex(object):
 
     def __iter__(self):
         return self
-        
+
     def ndincr(self):
         """
         Increment the multi-dimensional index by one.
 
         This method is for backward compatibility only: do not use.
         """
-        self.next()
+        next(self)
 
-    def next(self):
+    def __next__(self):
         """
         Standard iterator method, updates the index and returns the index tuple.
 
@@ -581,8 +563,10 @@ class ndindex(object):
             Returns a tuple containing the indices of the current iteration.
 
         """
-        self._it.next()
+        next(self._it)
         return self._it.multi_index
+
+    next =  __next__
 
 
 # You can do all this with slice() plus a few special objects,
@@ -643,7 +627,7 @@ class IndexExpression(object):
         self.maketuple = maketuple
 
     def __getitem__(self, item):
-        if self.maketuple and type(item) != tuple:
+        if self.maketuple and not isinstance(item, tuple):
             return (item,)
         else:
             return item
@@ -673,7 +657,8 @@ def fill_diagonal(a, val, wrap=False):
       Value to be written on the diagonal, its type must be compatible with
       that of the array a.
 
-    wrap: bool For tall matrices in NumPy version up to 1.6.2, the
+    wrap : bool 
+      For tall matrices in NumPy version up to 1.6.2, the
       diagonal "wrapped" after N columns. You can have this behavior
       with this option. This affect only tall matrices.
 

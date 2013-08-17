@@ -39,6 +39,7 @@ Misc Functions
 - `polyvander` -- Vandermonde-like matrix for powers.
 - `polyvander2d` -- Vandermonde-like matrix for 2D power series.
 - `polyvander3d` -- Vandermonde-like matrix for 3D power series.
+- `polycompanion` -- companion matrix in power series form.
 - `polyfit` -- least-squares fit returning a polynomial.
 - `polytrim` -- trim leading coefficients from a polynomial.
 - `polyline` -- polynomial representing given straight line.
@@ -52,7 +53,7 @@ See also
 `numpy.polynomial`
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['polyzero', 'polyone', 'polyx', 'polydomain', 'polyline',
     'polyadd', 'polysub', 'polymulx', 'polymul', 'polydiv', 'polypow',
@@ -62,9 +63,9 @@ __all__ = ['polyzero', 'polyone', 'polyx', 'polydomain', 'polyline',
 
 import numpy as np
 import numpy.linalg as la
-import polyutils as pu
+from . import polyutils as pu
 import warnings
-from polytemplate import polytemplate
+from .polytemplate import polytemplate
 
 polytrim = pu.trimcoef
 
@@ -485,7 +486,7 @@ def polyder(c, m=1, scl=1, axis=0):
 
     Parameters
     ----------
-    c: array_like
+    c : array_like
         Array of polynomial coefficients. If c is multidimensional the
         different axis correspond to different variables with the degree
         in each axis given by the corresponding index.
@@ -1417,7 +1418,7 @@ def polycompanion(c):
     if len(c) < 2 :
         raise ValueError('Series must have maximum degree of at least 1.')
     if len(c) == 2:
-        return np.array(-c[0]/c[1])
+        return np.array([[-c[0]/c[1]]])
 
     n = len(c) - 1
     mat = np.zeros((n, n), dtype=c.dtype)

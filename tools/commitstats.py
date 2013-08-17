@@ -1,3 +1,4 @@
+from __future__ import division, absolute_import, print_function
 
 # Run svn log -l <some number>
 
@@ -34,10 +35,10 @@ count.sort()
 
              
 
-print "** SciPy and NumPy **"
-print "====================="
+print("** SciPy and NumPy **")
+print("=====================")
 for val in count:
-    print val
+    print(val)
 
 
                    

@@ -24,7 +24,7 @@ combinations of the variables using (inside the comment portion of the inner loo
 
 This will exlude the pattern where var1 is value1 and var2 is value2 when
 the result is being generated.
-  
+
 
 In the main body each replace will use one entry from the list of named replacements
 
@@ -78,6 +78,8 @@ Example:
         3, 3, jim
 
 """
+from __future__ import division, absolute_import, print_function
+
 
 __all__ = ['process_str', 'process_file']
 
@@ -118,7 +120,7 @@ def parse_structure(astr, level):
     ind = 0
     line = 0
     spanlist = []
-    while 1:
+    while True:
         start = astr.find(loopbeg, ind)
         if start == -1:
             break
@@ -269,14 +271,14 @@ def resolve_includes(source):
     d = os.path.dirname(source)
     fid = open(source)
     lines = []
-    for line in fid.readlines():
+    for line in fid:
         m = include_src_re.match(line)
         if m:
             fn = m.group('name')
             if not os.path.isabs(fn):
                 fn = os.path.join(d,fn)
             if os.path.isfile(fn):
-                print ('Including file',fn)
+                print('Including file',fn)
                 lines.extend(resolve_includes(fn))
             else:
                 lines.append(line)
@@ -301,7 +303,7 @@ def unique_key(adict):
     # currently it works by appending together n of the letters of the
     #   current keys and increasing n until a unique key is found
     # -- not particularly quick
-    allkeys = adict.keys()
+    allkeys = list(adict.keys())
     done = False
     n = 1
     while not done:

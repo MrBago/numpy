@@ -11,7 +11,9 @@ terms of the NumPy License.
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Date: 2005/02/03 19:30:23 $
 Pearu Peterson
+
 """
+from __future__ import division, absolute_import, print_function
 
 __version__ = "$Revision: 1.27 $"[10:-1]
 
@@ -23,11 +25,11 @@ errmess=sys.stderr.write
 outmess=sys.stdout.write
 show=pprint.pprint
 
-from auxfuncs import *
+from .auxfuncs import *
 import numpy as np
-import capi_maps
-import func2subr
-from crackfortran import undo_rmbadname, undo_rmbadname1
+from . import capi_maps
+from . import func2subr
+from .crackfortran import undo_rmbadname, undo_rmbadname1
 
 options={}
 
@@ -82,7 +84,7 @@ fgetdims2_sa="""\
 
 def buildhooks(pymod):
     global fgetdims1,fgetdims2
-    import rules
+    from . import rules
     ret = {'f90modhooks':[],'initf90modhooks':[],'body':[],
            'need':['F_FUNC','arrayobject.h'],
            'separatorsfor':{'includes0':'\n','includes':'\n'},
@@ -117,7 +119,7 @@ def buildhooks(pymod):
         dadd('\\subsection{Fortran 90/95 module \\texttt{%s}}\n'%(m['name']))
         if hasnote(m):
             note = m['note']
-            if type(note) is type([]): note='\n'.join(note)
+            if isinstance(note, list): note='\n'.join(note)
             dadd(note)
         if onlyvars:
             dadd('\\begin{description}')
@@ -143,7 +145,7 @@ def buildhooks(pymod):
             dadd('\\item[]{{}\\verb@%s@{}}'%(capi_maps.getarrdocsign(n,var)))
             if hasnote(var):
                 note = var['note']
-                if type(note) is type([]): note='\n'.join(note)
+                if isinstance(note, list): note='\n'.join(note)
                 dadd('--- %s'%(note))
             if isallocatable(var):
                 fargs.append('f2py_%s_getdims_%s'%(m['name'],n))
@@ -156,7 +158,7 @@ def buildhooks(pymod):
                 fadd('integer flag\n')
                 fhooks[0]=fhooks[0]+fgetdims1
                 dms = eval('range(1,%s+1)'%(dm['rank']))
-                fadd(' allocate(d(%s))\n'%(','.join(map(lambda i:'s(%s)'%i,dms))))
+                fadd(' allocate(d(%s))\n'%(','.join(['s(%s)'%i for i in dms])))
                 fhooks[0]=fhooks[0]+use_fgetdims2
                 fadd('end subroutine %s'%(fargs[-1]))
             else:
@@ -169,7 +171,7 @@ def buildhooks(pymod):
         if hasbody(m):
             for b in m['body']:
                 if not isroutine(b):
-                    print 'Skipping',b['block'],b['name']
+                    print('Skipping',b['block'],b['name'])
                     continue
                 modobjs.append('%s()'%(b['name']))
                 b['modulename'] = m['name']

@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import re
 import os
 import sys
@@ -14,7 +16,7 @@ from distutils.version import LooseVersion
 from numpy.distutils import log
 from numpy.distutils.exec_command import exec_command
 from numpy.distutils.misc_util import cyg2win32, is_sequence, mingw32, \
-                                      quote_args, msvc_on_amd64
+                                      quote_args
 from numpy.distutils.compat import get_exception
 
 
@@ -163,7 +165,7 @@ def CCompiler_compile(self, sources, output_dir=None, macros=None,
         return []
     # FIXME:RELATIVE_IMPORT
     if sys.version_info[0] < 3:
-        from fcompiler import FCompiler
+        from .fcompiler import FCompiler
     else:
         from numpy.distutils.fcompiler import FCompiler
     if isinstance(self, FCompiler):
@@ -190,7 +192,7 @@ def CCompiler_compile(self, sources, output_dir=None, macros=None,
     # build any sources in same order as they were originally specified
     #   especially important for fortran .f90 files using modules
     if isinstance(self, FCompiler):
-        objects_to_build = build.keys()
+        objects_to_build = list(build.keys())
         for obj in objects:
             if obj in objects_to_build:
                 src, ext = build[obj]
@@ -253,7 +255,7 @@ replace_method(CCompiler, 'customize_cmd', CCompiler_customize_cmd)
 def _compiler_to_string(compiler):
     props = []
     mx = 0
-    keys = compiler.executables.keys()
+    keys = list(compiler.executables.keys())
     for key in ['version','libraries','library_dirs',
                 'object_switch','compile_switch',
                 'include_dirs','define','undef','rpath','link_objects']:
@@ -401,7 +403,7 @@ def simple_version_match(pat=r'[-.\d]+', ignore='', start=''):
             if not m:
                 return None
             pos = m.end()
-        while 1:
+        while True:
             m = re.search(pat, version_string[pos:])
             if not m:
                 return None
@@ -652,6 +654,3 @@ def split_quoted(s):
     return words
 ccompiler.split_quoted = split_quoted
 ##Fix distutils.util.split_quoted:
-
-# define DISTUTILS_USE_SDK when necessary to workaround distutils/msvccompiler.py bug
-msvc_on_amd64()

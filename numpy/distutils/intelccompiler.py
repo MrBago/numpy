@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 from distutils.unixccompiler import UnixCCompiler
 from numpy.distutils.exec_command import find_executable
 

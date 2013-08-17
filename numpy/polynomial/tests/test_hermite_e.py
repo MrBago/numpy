@@ -1,7 +1,7 @@
 """Tests for hermite_e module.
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 import numpy.polynomial.hermite_e as herme
@@ -252,7 +252,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = herme.hermeint(tgt, m=1, k=[k])
-                res = herme.hermeint(pol, m=j, k=range(j))
+                res = herme.hermeint(pol, m=j, k=list(range(j)))
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with lbnd
@@ -262,7 +262,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = herme.hermeint(tgt, m=1, k=[k], lbnd=-1)
-                res = herme.hermeint(pol, m=j, k=range(j), lbnd=-1)
+                res = herme.hermeint(pol, m=j, k=list(range(j)), lbnd=-1)
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with scaling
@@ -272,7 +272,7 @@ class TestIntegral(TestCase):
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = herme.hermeint(tgt, m=1, k=[k], scl=2)
-                res = herme.hermeint(pol, m=j, k=range(j), scl=2)
+                res = herme.hermeint(pol, m=j, k=list(range(j)), scl=2)
                 assert_almost_equal(trim(res), trim(tgt))
 
     def test_hermeint_axis(self):
@@ -426,6 +426,22 @@ class TestFitting(TestCase):
         # is zero when summed.
         x = [1, 1j, -1, -1j]
         assert_almost_equal(herme.hermefit(x, x, 1), [0, 1])
+
+
+class TestCompanion(TestCase):
+
+    def test_raises(self):
+        assert_raises(ValueError, herme.hermecompanion, [])
+        assert_raises(ValueError, herme.hermecompanion, [1])
+
+    def test_dimensions(self):
+        for i in range(1, 5):
+            coef = [0]*i + [1]
+            assert_(herme.hermecompanion(coef).shape == (i, i))
+
+    def test_linear_root(self):
+        assert_(herme.hermecompanion([1, 2])[0, 0] == -.5)
+
 
 class TestGauss(TestCase):
 

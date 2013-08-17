@@ -1,9 +1,13 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
 
 import numpy as np
 from numpy.testing import *
 import numpy.core.umath_tests as umt
+import numpy.core.operand_flag_tests as opflag_tests
 from numpy.compat import asbytes
+from numpy.core.test_rational import *
 
 class TestUfunc(TestCase):
     def test_pickle(self):
@@ -12,13 +16,14 @@ class TestUfunc(TestCase):
 
     def test_pickle_withstring(self):
         import pickle
-        astring = asbytes("cnumpy.core\n_ufunc_reconstruct\np0\n(S'numpy.core.umath'\np1\nS'cos'\np2\ntp3\nRp4\n.")
+        astring = asbytes("cnumpy.core\n_ufunc_reconstruct\np0\n"
+                "(S'numpy.core.umath'\np1\nS'cos'\np2\ntp3\nRp4\n.")
         assert pickle.loads(astring) is np.cos
 
     def test_reduceat_shifting_sum(self) :
         L = 6
         x = np.arange(L)
-        idx = np.array(zip(np.arange(L-2), np.arange(L-2)+2)).ravel()
+        idx = np.array(list(zip(np.arange(L - 2), np.arange(L - 2) + 2))).ravel()
         assert_array_equal(np.add.reduceat(x,idx)[::2], [1,3,5,7])
 
     def test_generic_loops(self) :
@@ -314,6 +319,8 @@ class TestUfunc(TestCase):
     def test_inner1d(self):
         a = np.arange(6).reshape((2,3))
         assert_array_equal(umt.inner1d(a,a), np.sum(a*a,axis=-1))
+        a = np.arange(6)
+        assert_array_equal(umt.inner1d(a,a), np.sum(a*a))
 
     def test_broadcast(self):
         msg = "broadcast"
@@ -423,6 +430,13 @@ class TestUfunc(TestCase):
         w = np.arange(300,324).reshape((2,3,4))
         assert_array_equal(umt.innerwt(a,b,w), np.sum(a*b*w,axis=-1))
 
+    def test_innerwt_empty(self):
+        """Test generalized ufunc with zero-sized operands"""
+        a = np.array([], dtype='f8')
+        b = np.array([], dtype='f8')
+        w = np.array([], dtype='f8')
+        assert_array_equal(umt.innerwt(a,b,w), np.sum(a*b*w,axis=-1))
+
     def test_matrix_multiply(self):
         self.compare_matrix_multiply_results(np.long)
         self.compare_matrix_multiply_results(np.double)
@@ -438,7 +452,7 @@ class TestUfunc(TestCase):
             ret = ()
             base = permute_n(n-1)
             for perm in base:
-                for i in xrange(n):
+                for i in range(n):
                     new = perm + [n-1]
                     new[n-1] = new[i]
                     new[i] = n-1
@@ -552,11 +566,24 @@ class TestUfunc(TestCase):
         assert_equal(np.max(3, axis=0), 3)
         assert_equal(np.min(2.5, axis=0), 2.5)
 
+        # Check scalar behaviour for ufuncs without an identity
+        assert_equal(np.power.reduce(3), 3)
+
         # Make sure that scalars are coming out from this operation
         assert_(type(np.prod(np.float32(2.5), axis=0)) is np.float32)
         assert_(type(np.sum(np.float32(2.5), axis=0)) is np.float32)
         assert_(type(np.max(np.float32(2.5), axis=0)) is np.float32)
         assert_(type(np.min(np.float32(2.5), axis=0)) is np.float32)
+
+        # check if scalars/0-d arrays get cast
+        assert_(type(np.any(0, axis=0)) is np.bool_)
+
+        # assert that 0-d arrays get wrapped
+        class MyArray(np.ndarray):
+            pass
+        a = np.array(1).view(MyArray)
+        assert_(type(np.any(a)) is MyArray)
+
 
     def test_casting_out_param(self):
         # Test that it's possible to do casts on output
@@ -759,6 +786,219 @@ class TestUfunc(TestCase):
         # Make sure that explicitly overriding the warning is allowed:
         assert_no_warnings(np.add, a, 1.1, out=a, casting="unsafe")
         assert_array_equal(a, [4, 5, 6])
+
+    def test_ufunc_custom_out(self):
+        # Test ufunc with built in input types and custom output type
+
+        a = np.array([0, 1, 2], dtype='i8')
+        b = np.array([0, 1, 2], dtype='i8')
+        c = np.empty(3, dtype=rational)
+
+        # Output must be specified so numpy knows what
+        # ufunc signature to look for
+        result = test_add(a, b, c)
+        assert_equal(result, np.array([0, 2, 4], dtype=rational))
+
+        # no output type should raise TypeError
+        assert_raises(TypeError, test_add, a, b)
+    
+    def test_operand_flags(self):
+        a = np.arange(16, dtype='l').reshape(4,4)
+        b = np.arange(9, dtype='l').reshape(3,3)
+        opflag_tests.inplace_add(a[:-1,:-1], b)
+        assert_equal(a, np.array([[0,2,4,3],[7,9,11,7],
+            [14,16,18,11],[12,13,14,15]], dtype='l'))
+
+        a = np.array(0)
+        opflag_tests.inplace_add(a, 3)
+        assert_equal(a, 3)
+        opflag_tests.inplace_add(a, [3, 4])
+        assert_equal(a, 10)
+    
+    def test_struct_ufunc(self):
+        import numpy.core.struct_ufunc_test as struct_ufunc
+
+        a = np.array([(1,2,3)], dtype='u8,u8,u8')
+        b = np.array([(1,2,3)], dtype='u8,u8,u8')
+
+        result = struct_ufunc.add_triplet(a, b)
+        assert_equal(result, np.array([(2, 4, 6)], dtype='u8,u8,u8'))
+
+    def test_custom_ufunc(self):
+        a = np.array([rational(1,2), rational(1,3), rational(1,4)],
+            dtype=rational);
+        b = np.array([rational(1,2), rational(1,3), rational(1,4)],
+            dtype=rational);
+
+        result = test_add_rationals(a, b)
+        expected = np.array([rational(1), rational(2,3), rational(1,2)],
+            dtype=rational);
+        assert_equal(result, expected);
+
+    def test_custom_array_like(self):
+        class MyThing(object):
+            __array_priority__ = 1000
+
+            rmul_count = 0
+            getitem_count = 0
+
+            def __init__(self, shape):
+                self.shape = shape
+
+            def __len__(self):
+                return self.shape[0]
+
+            def __getitem__(self, i):
+                MyThing.getitem_count += 1
+                if not isinstance(i, tuple):
+                    i = (i,)
+                if len(i) > len(self.shape):
+                    raise IndexError("boo")
+
+                return MyThing(self.shape[len(i):])
+
+            def __rmul__(self, other):
+                MyThing.rmul_count += 1
+                return self
+
+        np.float64(5)*MyThing((3, 3))
+        assert_(MyThing.rmul_count == 1, MyThing.rmul_count)
+        assert_(MyThing.getitem_count <= 2, MyThing.getitem_count)
+
+    def test_inplace_fancy_indexing(self):
+
+        a = np.arange(10)
+        np.add.at(a, [2,5,2], 1)
+        assert_equal(a, [0, 1, 4, 3, 4, 6, 6, 7, 8, 9])
+
+        a = np.arange(10)
+        b = np.array([100,100,100])
+        np.add.at(a, [2,5,2], b)
+        assert_equal(a, [0, 1, 202, 3, 4, 105, 6, 7, 8, 9])
+
+        a = np.arange(9).reshape(3,3)
+        b = np.array([[100,100,100],[200,200,200],[300,300,300]])
+        np.add.at(a, (slice(None), [1,2,1]), b)
+        assert_equal(a, [[0,201,102], [3,404,205], [6,607,308]])
+
+        a = np.arange(27).reshape(3,3,3)
+        b = np.array([100,200,300])
+        np.add.at(a, (slice(None), slice(None), [1,2,1]), b)
+        assert_equal(a,
+            [[[0,401,202], 
+              [3,404,205], 
+              [6,407,208]],
+              
+             [[9, 410,211],  
+              [12,413,214], 
+              [15,416,217]],
+
+             [[18,419,220],
+              [21,422,223],
+              [24,425,226]]])
+
+        a = np.arange(9).reshape(3,3)
+        b = np.array([[100,100,100],[200,200,200],[300,300,300]])
+        np.add.at(a, ([1,2,1], slice(None)), b)
+        assert_equal(a, [[0,1,2], [403,404,405], [206,207,208]])
+
+        a = np.arange(27).reshape(3,3,3)
+        b = np.array([100,200,300])
+        np.add.at(a, (slice(None), [1,2,1], slice(None)), b)
+        assert_equal(a,
+            [[[0,  1,  2  ], 
+              [203,404,605], 
+              [106,207,308]],
+              
+             [[9,  10, 11 ],  
+              [212,413,614], 
+              [115,216,317]],
+
+             [[18, 19, 20 ],
+              [221,422,623],
+              [124,225,326]]])
+
+        a = np.arange(9).reshape(3,3)
+        b = np.array([100,200,300])
+        np.add.at(a, (0, [1,2,1]), b)
+        assert_equal(a, [[0,401,202], [3,4,5], [6,7,8]])
+
+        a = np.arange(27).reshape(3,3,3)
+        b = np.array([100,200,300])
+        np.add.at(a, ([1,2,1], 0, slice(None)), b)
+        assert_equal(a,
+            [[[0,  1,  2], 
+              [3,  4,  5], 
+              [6,  7,  8]],
+              
+             [[209,410,611],  
+              [12,  13, 14], 
+              [15,  16, 17]],
+
+             [[118,219,320],
+              [21,  22, 23],
+              [24,  25, 26]]])
+
+        a = np.arange(27).reshape(3,3,3)
+        b = np.array([100,200,300])
+        np.add.at(a, (slice(None), slice(None), slice(None)), b)
+        assert_equal(a,
+            [[[100,201,302], 
+              [103,204,305], 
+              [106,207,308]],
+              
+             [[109,210,311],  
+              [112,213,314], 
+              [115,216,317]],
+
+             [[118,219,320],
+              [121,222,323],
+              [124,225,326]]])
+
+        a = np.arange(10)
+        np.negative.at(a, [2,5,2])
+        assert_equal(a, [0, 1, 2, 3, 4, -5, 6, 7, 8, 9])
+
+        # Test 0-dim array
+        a = np.array(0)
+        np.add.at(a, (), 1)
+        assert_equal(a, 1)
+
+        assert_raises(IndexError, np.add.at, a, 0, 1)
+        assert_raises(IndexError, np.add.at, a, [], 1)
+
+        # Test mixed dtypes
+        a = np.arange(10)
+        np.power.at(a, [1,2,3,2], 3.5)
+        assert_equal(a, np.array([0, 1, 4414, 46, 4, 5, 6, 7, 8, 9]))
+
+        # Test boolean indexing and boolean ufuncs
+        a = np.arange(10)
+        index = a % 2 == 0
+        np.equal.at(a, index, [0, 2, 4, 6, 8])
+        assert_equal(a, [1, 1, 1, 3, 1, 5, 1, 7, 1, 9])
+
+        # Test unary operator
+        a = np.arange(10, dtype='u4')
+        np.invert.at(a, [2, 5, 2])
+        assert_equal(a, [0, 1, 2, 3, 4, 5 ^ 0xffffffff, 6, 7, 8, 9])
+
+        # Test empty subspace
+        orig = np.arange(4)
+        a = orig[:,None][:,0:0]
+        np.add.at(a, [0,1], 3)
+        assert_array_equal(orig, np.arange(4))
+
+        # Test with swapped byte order
+        index = np.array([1,2,1], np.dtype('i').newbyteorder())
+        values = np.array([1,2,3,4], np.dtype('f').newbyteorder())
+        np.add.at(values, index, 3)
+        assert_array_equal(values, [1,8,6,4])
+
+        # Test exception thrown
+        values = np.array(['a', 1], dtype=np.object)
+        self.assertRaises(TypeError, np.add.at, values, [0,1], 1)
+        assert_array_equal(values, np.array(['a', 1], dtype=np.object))
 
 if __name__ == "__main__":
     run_module_suite()

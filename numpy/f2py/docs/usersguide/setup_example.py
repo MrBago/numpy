@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import division, absolute_import, print_function
+
 # File: setup_example.py
 
 from numpy_distutils.core import Extension

@@ -7,6 +7,7 @@
 
 #include "npy_config.h"
 #include "npy_pycompat.h"
+#include "common.h"
 
 #include "usertypes.h"
 
@@ -27,6 +28,64 @@
  * be allowed under the NPY_SAME_KIND_CASTING rules, and if not we issue a
  * warning (that people's code will be broken in a future release.)
  */
+
+/*
+ * PyArray_GetAttrString_SuppressException:
+ *
+ * Stripped down version of PyObject_GetAttrString,
+ * avoids lookups for None, tuple, and List objects,
+ * and doesn't create a PyErr since this code ignores it.
+ *
+ * This can be much faster then PyObject_GetAttrString where
+ * exceptions are not used by caller.
+ *
+ * 'obj' is the object to search for attribute.
+ *
+ * 'name' is the attribute to search for.
+ *
+ * Returns attribute value on success, 0 on failure.
+ */
+PyObject *
+PyArray_GetAttrString_SuppressException(PyObject *obj, char *name)
+{
+    PyTypeObject *tp = Py_TYPE(obj);
+    PyObject *res = (PyObject *)NULL;
+
+    /* We do not need to check for special attributes on trivial types */
+    if (obj == Py_None ||
+            PyList_CheckExact(obj) ||
+            PyTuple_CheckExact(obj)) {
+        return NULL;
+    }
+
+    /* Attribute referenced by (char *)name */
+    if (tp->tp_getattr != NULL) {
+        res = (*tp->tp_getattr)(obj, name);
+        if (res == NULL) {
+            PyErr_Clear();
+        }
+    }
+    /* Attribute referenced by (PyObject *)name */
+    else if (tp->tp_getattro != NULL) {
+#if defined(NPY_PY3K)
+        PyObject *w = PyUnicode_InternFromString(name);
+#else
+        PyObject *w = PyString_InternFromString(name);
+#endif
+        if (w == NULL) {
+            return (PyObject *)NULL;
+        }
+        res = (*tp->tp_getattro)(obj, w);
+        Py_DECREF(w);
+        if (res == NULL) {
+            PyErr_Clear();
+        }
+    }
+    return res;
+}
+
+
+
 NPY_NO_EXPORT NPY_CASTING NPY_DEFAULT_ASSIGN_CASTING = NPY_INTERNAL_UNSAFE_CASTING_BUT_WARN_UNLESS_SAME_KIND;
 
 
@@ -147,9 +206,7 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
     int i, size;
     PyArray_Descr *dtype = NULL;
     PyObject *ip;
-#if PY_VERSION_HEX >= 0x02060000
     Py_buffer buffer_view;
-#endif
 
     /* Check if it's an ndarray */
     if (PyArray_Check(obj)) {
@@ -158,8 +215,17 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
         goto promote_types;
     }
 
+    /* See if it's a python None */
+    if (obj == Py_None) {
+        dtype = PyArray_DescrFromType(NPY_OBJECT);
+        if (dtype == NULL) {
+            goto fail;
+        }
+        Py_INCREF(dtype);
+        goto promote_types;
+    }
     /* Check if it's a NumPy scalar */
-    if (PyArray_IsScalar(obj, Generic)) {
+    else if (PyArray_IsScalar(obj, Generic)) {
         if (!string_type) {
             dtype = PyArray_DescrFromScalar(obj);
             if (dtype == NULL) {
@@ -309,35 +375,36 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
         goto promote_types;
     }
 
-#if PY_VERSION_HEX >= 0x02060000
     /* PEP 3118 buffer interface */
-    memset(&buffer_view, 0, sizeof(Py_buffer));
-    if (PyObject_GetBuffer(obj, &buffer_view, PyBUF_FORMAT|PyBUF_STRIDES) == 0 ||
-        PyObject_GetBuffer(obj, &buffer_view, PyBUF_FORMAT) == 0) {
-
-        PyErr_Clear();
-        dtype = _descriptor_from_pep3118_format(buffer_view.format);
-        PyBuffer_Release(&buffer_view);
-        if (dtype) {
+    if (PyObject_CheckBuffer(obj) == 1) {
+        memset(&buffer_view, 0, sizeof(Py_buffer));
+        if (PyObject_GetBuffer(obj, &buffer_view,
+                               PyBUF_FORMAT|PyBUF_STRIDES) == 0 ||
+            PyObject_GetBuffer(obj, &buffer_view, PyBUF_FORMAT) == 0) {
+    
+            PyErr_Clear();
+            dtype = _descriptor_from_pep3118_format(buffer_view.format);
+            PyBuffer_Release(&buffer_view);
+            if (dtype) {
+                goto promote_types;
+            }
+        }
+        else if (PyObject_GetBuffer(obj, &buffer_view, PyBUF_STRIDES) == 0 ||
+                 PyObject_GetBuffer(obj, &buffer_view, PyBUF_SIMPLE) == 0) {
+    
+            PyErr_Clear();
+            dtype = PyArray_DescrNewFromType(NPY_VOID);
+            dtype->elsize = buffer_view.itemsize;
+            PyBuffer_Release(&buffer_view);
             goto promote_types;
         }
+        else {
+            PyErr_Clear();
+        }
     }
-    else if (PyObject_GetBuffer(obj, &buffer_view, PyBUF_STRIDES) == 0 ||
-             PyObject_GetBuffer(obj, &buffer_view, PyBUF_SIMPLE) == 0) {
-
-        PyErr_Clear();
-        dtype = PyArray_DescrNewFromType(NPY_VOID);
-        dtype->elsize = buffer_view.itemsize;
-        PyBuffer_Release(&buffer_view);
-        goto promote_types;
-    }
-    else {
-        PyErr_Clear();
-    }
-#endif
 
     /* The array interface */
-    ip = PyObject_GetAttrString(obj, "__array_interface__");
+    ip = PyArray_GetAttrString_SuppressException(obj, "__array_interface__");
     if (ip != NULL) {
         if (PyDict_Check(ip)) {
             PyObject *typestr;
@@ -368,12 +435,9 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
         }
         Py_DECREF(ip);
     }
-    else {
-        PyErr_Clear();
-    }
 
     /* The array struct interface */
-    ip = PyObject_GetAttrString(obj, "__array_struct__");
+    ip = PyArray_GetAttrString_SuppressException(obj, "__array_struct__");
     if (ip != NULL) {
         PyArrayInterface *inter;
         char buf[40];
@@ -393,9 +457,6 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
         }
         Py_DECREF(ip);
     }
-    else {
-        PyErr_Clear();
-    }
 
     /* The old buffer interface */
 #if !defined(NPY_PY3K)
@@ -411,7 +472,9 @@ PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
 #endif
 
     /* The __array__ attribute */
-    if (PyObject_HasAttrString(obj, "__array__")) {
+    ip = PyArray_GetAttrString_SuppressException(obj, "__array__");
+    if (ip != NULL) {
+        Py_DECREF(ip);
         ip = PyObject_CallMethod(obj, "__array__", NULL);
         if(ip && PyArray_Check(ip)) {
             dtype = PyArray_DESCR((PyArrayObject *)ip);
@@ -612,8 +675,8 @@ _zerofill(PyArrayObject *ret)
 NPY_NO_EXPORT int
 _IsAligned(PyArrayObject *ap)
 {
-    int i, alignment, aligned = 1;
-    npy_intp ptr;
+    unsigned int i, aligned = 1;
+    const unsigned int alignment = PyArray_DESCR(ap)->alignment;
 
     /* The special casing for STRING and VOID types was removed
      * in accordance with http://projects.scipy.org/numpy/ticket/1227
@@ -622,14 +685,25 @@ _IsAligned(PyArrayObject *ap)
      * PyArray_DescrConverter(), but not necessarily when using
      * PyArray_DescrAlignConverter(). */
 
-    alignment = PyArray_DESCR(ap)->alignment;
     if (alignment == 1) {
         return 1;
     }
-    ptr = (npy_intp) PyArray_DATA(ap);
-    aligned = (ptr % alignment) == 0;
+    aligned = npy_is_aligned(PyArray_DATA(ap), alignment);
+
     for (i = 0; i < PyArray_NDIM(ap); i++) {
-        aligned &= ((PyArray_STRIDES(ap)[i] % alignment) == 0);
+#if NPY_RELAXED_STRIDES_CHECKING
+        if (PyArray_DIM(ap, i) > 1) {
+            /* if shape[i] == 1, the stride is never used */
+            aligned &= npy_is_aligned((void*)PyArray_STRIDES(ap)[i],
+                                      alignment);
+        }
+        else if (PyArray_DIM(ap, i) == 0) {
+            /* an array with zero elements is always aligned */
+            return 1;
+        }
+#else /* not NPY_RELAXED_STRIDES_CHECKING */
+        aligned &= npy_is_aligned((void*)PyArray_STRIDES(ap)[i], alignment);
+#endif /* not NPY_RELAXED_STRIDES_CHECKING */
     }
     return aligned != 0;
 }
@@ -680,6 +754,7 @@ _IsWriteable(PyArrayObject *ap)
 }
 
 
+/* Gets a half-open range [start, end) of offsets from the data pointer */
 NPY_NO_EXPORT void
 offset_bounds_from_strides(const int itemsize, const int nd,
                            const npy_intp *dims, const npy_intp *strides,
@@ -691,11 +766,12 @@ offset_bounds_from_strides(const int itemsize, const int nd,
 
     for (i = 0; i < nd; i++) {
         if (dims[i] == 0) {
-            /* Empty array special case */
+            /* If the array size is zero, return an empty range */
             *lower_offset = 0;
             *upper_offset = 0;
             return;
         }
+        /* Expand either upwards or downwards depending on stride */
         max_axis_offset = strides[i] * (dims[i] - 1);
         if (max_axis_offset > 0) {
             upper += max_axis_offset;
@@ -704,6 +780,7 @@ offset_bounds_from_strides(const int itemsize, const int nd,
             lower += max_axis_offset;
         }
     }
+    /* Return a half-open range */
     upper += itemsize;
     *lower_offset = lower;
     *upper_offset = upper;

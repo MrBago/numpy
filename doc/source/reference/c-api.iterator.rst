@@ -629,46 +629,17 @@ Construction and Destruction
             returns true from the corresponding element in the ARRAYMASK
             operand.
 
-        .. cvar:: NPY_ITER_USE_MASKNA
-
-            .. versionadded:: 1.7
-
-            Adds a new operand to the end of the operand list which
-            iterates over the mask of this operand. If this operand has
-            no mask and is read-only, it broadcasts a constant
-            one-valued mask to indicate every value is valid. If this
-            operand has no mask and is writeable, an error is raised.
-
-            Each operand which has this flag applied to it causes
-            an additional operand to be tacked on the end of the operand
-            list, in an order matching that of the operand array.
-            For example, if there are four operands, and operands with index
-            one and three have the flag :cdata:`NPY_ITER_USE_MASKNA`
-            specified, there will be six operands total, and they will
-            look like [op0, op1, op2, op3, op1_mask, op3_mask].
-
-        .. cvar:: NPY_ITER_IGNORE_MASKNA
-
-            .. versionadded:: 1.7
-
-            Under some circumstances, code doing an iteration will
-            have already called :cfunc:`PyArray_ContainsNA` on an
-            operand which has a mask, and seen that its return value
-            was false. When this occurs, it is safe to do the iteration
-            without simultaneously iterating over the mask, and this
-            flag allows that to be done.
-
 .. cfunction:: NpyIter* NpyIter_AdvancedNew(npy_intp nop, PyArrayObject** op, npy_uint32 flags, NPY_ORDER order, NPY_CASTING casting, npy_uint32* op_flags, PyArray_Descr** op_dtypes, int oa_ndim, int** op_axes, npy_intp* itershape, npy_intp buffersize)
 
     Extends :cfunc:`NpyIter_MultiNew` with several advanced options providing
     more control over broadcasting and buffering.
 
-    If 0/NULL values are passed to ``oa_ndim``, ``op_axes``, ``itershape``,
+    If -1/NULL values are passed to ``oa_ndim``, ``op_axes``, ``itershape``,
     and ``buffersize``, it is equivalent to :cfunc:`NpyIter_MultiNew`.
 
-    The parameter ``oa_ndim``, when non-zero, specifies the number of
+    The parameter ``oa_ndim``, when not zero or -1, specifies the number of
     dimensions that will be iterated with customized broadcasting.
-    If it is provided, ``op_axes`` and/or ``itershape`` must also be provided.
+    If it is provided, ``op_axes`` must and ``itershape`` can also be provided.
     The ``op_axes`` parameter let you control in detail how the
     axes of the operand arrays get matched together and iterated.
     In ``op_axes``, you must provide an array of ``nop`` pointers
@@ -678,6 +649,11 @@ Construction and Destruction
     -1 which means ``newaxis``.  Within each ``op_axes[j]`` array, axes
     may not be repeated.  The following example is how normal broadcasting
     applies to a 3-D array, a 2-D array, a 1-D array and a scalar.
+    
+    **Note**: Before NumPy 1.8 ``oa_ndim == 0` was used for signalling that
+    that ``op_axes`` and ``itershape`` are unused. This is deprecated and
+    should be replaced with -1. Better backward compatibility may be
+    achieved by using :cfunc:`NpyIter_MultiNew` for this case.
 
     .. code-block:: c
 

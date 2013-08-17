@@ -1027,6 +1027,16 @@ array_copy(PyArrayObject *self, PyObject *args, PyObject *kwds)
     return PyArray_NewCopy(self, order);
 }
 
+/* Separate from array_copy to make __copy__ preserve Fortran contiguity. */
+static PyObject *
+array_copy_keeporder(PyArrayObject *self, PyObject *args, PyObject *kwds)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return NULL;
+    }
+    return PyArray_NewCopy(self, NPY_KEEPORDER);
+}
+
 #include <stdio.h>
 static PyObject *
 array_resize(PyArrayObject *self, PyObject *args, PyObject *kwds)
@@ -1170,6 +1180,75 @@ array_sort(PyArrayObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyObject *
+array_partition(PyArrayObject *self, PyObject *args, PyObject *kwds)
+{
+    int axis=-1;
+    int val;
+    NPY_SELECTKIND sortkind = NPY_INTROSELECT;
+    PyObject *order = NULL;
+    PyArray_Descr *saved = NULL;
+    PyArray_Descr *newd;
+    static char *kwlist[] = {"kth", "axis", "kind", "order", NULL};
+    PyArrayObject * ktharray;
+    PyObject * kthobj;
+
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|iO&O", kwlist,
+                                     &kthobj,
+                                     &axis,
+                                     PyArray_SelectkindConverter, &sortkind,
+                                     &order)) {
+        return NULL;
+    }
+
+    if (order == Py_None) {
+        order = NULL;
+    }
+    if (order != NULL) {
+        PyObject *new_name;
+        PyObject *_numpy_internal;
+        saved = PyArray_DESCR(self);
+        if (!PyDataType_HASFIELDS(saved)) {
+            PyErr_SetString(PyExc_ValueError, "Cannot specify " \
+                            "order when the array has no fields.");
+            return NULL;
+        }
+        _numpy_internal = PyImport_ImportModule("numpy.core._internal");
+        if (_numpy_internal == NULL) {
+            return NULL;
+        }
+        new_name = PyObject_CallMethod(_numpy_internal, "_newnames",
+                                       "OO", saved, order);
+        Py_DECREF(_numpy_internal);
+        if (new_name == NULL) {
+            return NULL;
+        }
+        newd = PyArray_DescrNew(saved);
+        Py_DECREF(newd->names);
+        newd->names = new_name;
+        ((PyArrayObject_fields *)self)->descr = newd;
+    }
+
+    ktharray = (PyArrayObject *)PyArray_FromAny(kthobj, NULL, 0, 1,
+                                                NPY_ARRAY_DEFAULT, NULL);
+    if (ktharray == NULL)
+        return NULL;
+
+    val = PyArray_Partition(self, ktharray, axis, sortkind);
+    Py_DECREF(ktharray);
+
+    if (order != NULL) {
+        Py_XDECREF(PyArray_DESCR(self));
+        ((PyArrayObject_fields *)self)->descr = saved;
+    }
+    if (val < 0) {
+        return NULL;
+    }
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+static PyObject *
 array_argsort(PyArrayObject *self, PyObject *args, PyObject *kwds)
 {
     int axis = -1;
@@ -1212,6 +1291,67 @@ array_argsort(PyArrayObject *self, PyObject *args, PyObject *kwds)
     }
 
     res = PyArray_ArgSort(self, axis, sortkind);
+    if (order != NULL) {
+        Py_XDECREF(PyArray_DESCR(self));
+        ((PyArrayObject_fields *)self)->descr = saved;
+    }
+    return PyArray_Return((PyArrayObject *)res);
+}
+
+
+static PyObject *
+array_argpartition(PyArrayObject *self, PyObject *args, PyObject *kwds)
+{
+    int axis = -1;
+    NPY_SELECTKIND sortkind = NPY_INTROSELECT;
+    PyObject *order = NULL, *res;
+    PyArray_Descr *newd, *saved=NULL;
+    static char *kwlist[] = {"kth", "axis", "kind", "order", NULL};
+    PyObject * kthobj;
+    PyArrayObject * ktharray;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O&O&O", kwlist,
+                                     &kthobj,
+                                     PyArray_AxisConverter, &axis,
+                                     PyArray_SelectkindConverter, &sortkind,
+                                     &order)) {
+        return NULL;
+    }
+    if (order == Py_None) {
+        order = NULL;
+    }
+    if (order != NULL) {
+        PyObject *new_name;
+        PyObject *_numpy_internal;
+        saved = PyArray_DESCR(self);
+        if (!PyDataType_HASFIELDS(saved)) {
+            PyErr_SetString(PyExc_ValueError, "Cannot specify "
+                            "order when the array has no fields.");
+            return NULL;
+        }
+        _numpy_internal = PyImport_ImportModule("numpy.core._internal");
+        if (_numpy_internal == NULL) {
+            return NULL;
+        }
+        new_name = PyObject_CallMethod(_numpy_internal, "_newnames",
+                                       "OO", saved, order);
+        Py_DECREF(_numpy_internal);
+        if (new_name == NULL) {
+            return NULL;
+        }
+        newd = PyArray_DescrNew(saved);
+        newd->names = new_name;
+        ((PyArrayObject_fields *)self)->descr = newd;
+    }
+
+    ktharray = (PyArrayObject *)PyArray_FromAny(kthobj, NULL, 0, 1,
+                                                NPY_ARRAY_DEFAULT, NULL);
+    if (ktharray == NULL)
+        return NULL;
+
+    res = PyArray_ArgPartition(self, ktharray, axis, sortkind);
+    Py_DECREF(ktharray);
+
     if (order != NULL) {
         Py_XDECREF(PyArray_DESCR(self));
         ((PyArrayObject_fields *)self)->descr = saved;
@@ -1291,7 +1431,7 @@ array_deepcopy(PyArrayObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O", &visit)) {
         return NULL;
     }
-    ret = (PyArrayObject *)PyArray_Copy(self);
+    ret = (PyArrayObject *)PyArray_NewCopy(self, NPY_KEEPORDER);
     if (PyDataType_REFCHK(PyArray_DESCR(self))) {
         copy = PyImport_ImportModule("copy");
         if (copy == NULL) {
@@ -1848,10 +1988,11 @@ array_cumprod(PyArrayObject *self, PyObject *args, PyObject *kwds)
 static PyObject *
 array_dot(PyArrayObject *self, PyObject *args, PyObject *kwds)
 {
-    PyObject *b;
+    PyObject *fname, *ret, *b, *out = NULL;
     static PyObject *numpycore = NULL;
+    char * kwords[] = {"b", "out", NULL };
 
-    if (!PyArg_ParseTuple(args, "O", &b)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwords, &b, &out)) { 
         return NULL;
     }
 
@@ -1863,8 +2004,15 @@ array_dot(PyArrayObject *self, PyObject *args, PyObject *kwds)
             return NULL;
         }
     }
-
-    return PyObject_CallMethod(numpycore, "dot", "OO", self, b);
+    fname = PyUString_FromString("dot");
+    if (out == NULL) {
+        ret = PyObject_CallMethodObjArgs(numpycore, fname, self, b, NULL);
+    }
+    else {
+        ret = PyObject_CallMethodObjArgs(numpycore, fname, self, b, out, NULL);
+    }
+    Py_DECREF(fname);
+    return ret;
 }
 
 
@@ -2152,8 +2300,8 @@ NPY_NO_EXPORT PyMethodDef array_methods[] = {
 
     /* for the copy module */
     {"__copy__",
-        (PyCFunction)array_copy,
-        METH_VARARGS | METH_KEYWORDS, NULL},
+        (PyCFunction)array_copy_keeporder,
+        METH_VARARGS, NULL},
     {"__deepcopy__",
         (PyCFunction)array_deepcopy,
         METH_VARARGS, NULL},
@@ -2184,6 +2332,9 @@ NPY_NO_EXPORT PyMethodDef array_methods[] = {
         METH_VARARGS | METH_KEYWORDS, NULL},
     {"argmin",
         (PyCFunction)array_argmin,
+        METH_VARARGS | METH_KEYWORDS, NULL},
+    {"argpartition",
+        (PyCFunction)array_argpartition,
         METH_VARARGS | METH_KEYWORDS, NULL},
     {"argsort",
         (PyCFunction)array_argsort,
@@ -2223,7 +2374,7 @@ NPY_NO_EXPORT PyMethodDef array_methods[] = {
         METH_VARARGS | METH_KEYWORDS, NULL},
     {"dot",
         (PyCFunction)array_dot,
-        METH_VARARGS, NULL},
+        METH_VARARGS | METH_KEYWORDS, NULL},
     {"fill",
         (PyCFunction)array_fill,
         METH_VARARGS, NULL},
@@ -2254,6 +2405,9 @@ NPY_NO_EXPORT PyMethodDef array_methods[] = {
     {"nonzero",
         (PyCFunction)array_nonzero,
         METH_VARARGS, NULL},
+    {"partition",
+        (PyCFunction)array_partition,
+        METH_VARARGS | METH_KEYWORDS, NULL},
     {"prod",
         (PyCFunction)array_prod,
         METH_VARARGS | METH_KEYWORDS, NULL},

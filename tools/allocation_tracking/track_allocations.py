@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import numpy as np
 import inspect
 from alloc_hook import NumpyAllocHook

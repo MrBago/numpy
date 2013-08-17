@@ -1,4 +1,7 @@
-## Automatically adapted for numpy Sep 19, 2005 by convertcode.py
+"""Automatically adapted for numpy Sep 19, 2005 by convertcode.py
+
+"""
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['iscomplexobj','isrealobj','imag','iscomplex',
            'isreal','nan_to_num','real','real_if_close',
@@ -8,7 +11,7 @@ __all__ = ['iscomplexobj','isrealobj','imag','iscomplex',
 import numpy.core.numeric as _nx
 from numpy.core.numeric import asarray, asanyarray, array, isnan, \
                 obj2sctype, zeros
-from ufunclike import isneginf, isposinf
+from .ufunclike import isneginf, isposinf
 
 _typecodes_by_elsize = 'GDFgdfQqLlIiHhBb?'
 
@@ -55,7 +58,7 @@ def mintypecode(typechars,typeset='GDFgdf',default='d'):
     'G'
 
     """
-    typecodes = [(type(t) is type('') and t) or asarray(t).dtype.char\
+    typecodes = [(isinstance(t, str) and t) or asarray(t).dtype.char\
                  for t in typechars]
     intersection = [t for t in typecodes if t in typeset]
     if not intersection:
@@ -448,7 +451,8 @@ def asscalar(a):
     Returns
     -------
     out : scalar
-        Scalar representation of `a`. The input data type is preserved.
+        Scalar representation of `a`. The output data type is the same type
+        returned by the input's `item` method.
 
     Examples
     --------

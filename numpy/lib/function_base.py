@@ -1,13 +1,14 @@
+from __future__ import division, absolute_import, print_function
+
 __docformat__ = "restructuredtext en"
-__all__ = ['select', 'piecewise', 'trim_zeros', 'copy', 'iterable',
-           'percentile', 'diff', 'gradient', 'angle', 'unwrap', 'sort_complex',
-           'disp', 'extract', 'place', 'nansum', 'nanmax', 'nanargmax',
-           'nanargmin', 'nanmin', 'vectorize', 'asarray_chkfinite', 'average',
-           'histogram', 'histogramdd', 'bincount', 'digitize', 'cov',
-           'corrcoef', 'msort', 'median', 'sinc', 'hamming', 'hanning',
-           'bartlett', 'blackman', 'kaiser', 'trapz', 'i0', 'add_newdoc',
-           'add_docstring', 'meshgrid', 'delete', 'insert', 'append', 'interp',
-           'add_newdoc_ufunc']
+__all__ = [
+    'select', 'piecewise', 'trim_zeros', 'copy', 'iterable', 'percentile',
+    'diff', 'gradient', 'angle', 'unwrap', 'sort_complex', 'disp',
+    'extract', 'place', 'vectorize', 'asarray_chkfinite', 'average',
+    'histogram', 'histogramdd', 'bincount', 'digitize', 'cov', 'corrcoef',
+    'msort', 'median', 'sinc', 'hamming', 'hanning', 'bartlett',
+    'blackman', 'kaiser', 'trapz', 'i0', 'add_newdoc', 'add_docstring',
+    'meshgrid', 'delete', 'insert', 'append', 'interp', 'add_newdoc_ufunc']
 
 import warnings
 import types
@@ -20,18 +21,21 @@ from numpy.core.numeric import ScalarType, dot, where, newaxis, intp, \
         integer, isscalar
 from numpy.core.umath import pi, multiply, add, arctan2,  \
         frompyfunc, isnan, cos, less_equal, sqrt, sin, mod, exp, log10
-from numpy.core.fromnumeric import ravel, nonzero, choose, sort, mean
+from numpy.core.fromnumeric import ravel, nonzero, choose, sort, partition, mean
 from numpy.core.numerictypes import typecodes, number
 from numpy.core import atleast_1d, atleast_2d
 from numpy.lib.twodim_base import diag
-from _compiled_base import _insert, add_docstring
-from _compiled_base import digitize, bincount, interp as compiled_interp
-from arraysetops import setdiff1d
-from utils import deprecate
-from _compiled_base import add_newdoc_ufunc
+from ._compiled_base import _insert, add_docstring
+from ._compiled_base import digitize, bincount, interp as compiled_interp
+from .utils import deprecate
+from ._compiled_base import add_newdoc_ufunc
 import numpy as np
 import collections
+from numpy.compat import long
 
+# Force range to be a generator, for np.delete's usage.
+if sys.version_info[0] < 3:
+    range = xrange
 
 def iterable(y):
     """
@@ -957,7 +961,7 @@ def diff(a, n=1, axis=-1):
 
     See Also
     --------
-    gradient, ediff1d
+    gradient, ediff1d, cumsum
 
     Examples
     --------
@@ -1268,8 +1272,7 @@ def unique(x):
         idx = concatenate(([True],tmp[1:]!=tmp[:-1]))
         return tmp[idx]
     except AttributeError:
-        items = list(set(x))
-        items.sort()
+        items = sorted(set(x))
         return asarray(items)
 
 def extract(condition, arr):
@@ -1357,311 +1360,6 @@ def place(arr, mask, vals):
     """
     return _insert(arr, mask, vals)
 
-def _nanop(op, fill, a, axis=None):
-    """
-    General operation on arrays with not-a-number values.
-
-    Parameters
-    ----------
-    op : callable
-        Operation to perform.
-    fill : float
-        NaN values are set to fill before doing the operation.
-    a : array-like
-        Input array.
-    axis : {int, None}, optional
-        Axis along which the operation is computed.
-        By default the input is flattened.
-
-    Returns
-    -------
-    y : {ndarray, scalar}
-        Processed data.
-
-    """
-    y = array(a, subok=True)
-
-    # We only need to take care of NaN's in floating point arrays
-    dt = y.dtype
-    if np.issubdtype(dt, np.integer) or np.issubdtype(dt, np.bool_):
-        return op(y, axis=axis)
-
-    mask = isnan(a)
-    # y[mask] = fill
-    # We can't use fancy indexing here as it'll mess w/ MaskedArrays
-    # Instead, let's fill the array directly...
-    np.copyto(y, fill, where=mask)
-    res = op(y, axis=axis)
-    mask_all_along_axis = mask.all(axis=axis)
-
-    # Along some axes, only nan's were encountered.  As such, any values
-    # calculated along that axis should be set to nan.
-    if mask_all_along_axis.any():
-        if np.isscalar(res):
-            res = np.nan
-        else:
-            res[mask_all_along_axis] = np.nan
-
-    return res
-
-def nansum(a, axis=None):
-    """
-    Return the sum of array elements over a given axis treating
-    Not a Numbers (NaNs) as zero.
-
-    Parameters
-    ----------
-    a : array_like
-        Array containing numbers whose sum is desired. If `a` is not an
-        array, a conversion is attempted.
-    axis : int, optional
-        Axis along which the sum is computed. The default is to compute
-        the sum of the flattened array.
-
-    Returns
-    -------
-    y : ndarray
-        An array with the same shape as a, with the specified axis removed.
-        If a is a 0-d array, or if axis is None, a scalar is returned with
-        the same dtype as `a`.
-
-    See Also
-    --------
-    numpy.sum : Sum across array including Not a Numbers.
-    isnan : Shows which elements are Not a Number (NaN).
-    isfinite: Shows which elements are not: Not a Number, positive and
-             negative infinity
-
-    Notes
-    -----
-    Numpy uses the IEEE Standard for Binary Floating-Point for Arithmetic
-    (IEEE 754). This means that Not a Number is not equivalent to infinity.
-    If positive or negative infinity are present the result is positive or
-    negative infinity. But if both positive and negative infinity are present,
-    the result is Not A Number (NaN).
-
-    Arithmetic is modular when using integer types (all elements of `a` must
-    be finite i.e. no elements that are NaNs, positive infinity and negative
-    infinity because NaNs are floating point types), and no error is raised
-    on overflow.
-
-
-    Examples
-    --------
-    >>> np.nansum(1)
-    1
-    >>> np.nansum([1])
-    1
-    >>> np.nansum([1, np.nan])
-    1.0
-    >>> a = np.array([[1, 1], [1, np.nan]])
-    >>> np.nansum(a)
-    3.0
-    >>> np.nansum(a, axis=0)
-    array([ 2.,  1.])
-
-    When positive infinity and negative infinity are present
-
-    >>> np.nansum([1, np.nan, np.inf])
-    inf
-    >>> np.nansum([1, np.nan, np.NINF])
-    -inf
-    >>> np.nansum([1, np.nan, np.inf, np.NINF])
-    nan
-
-    """
-    return _nanop(np.sum, 0, a, axis)
-
-def nanmin(a, axis=None):
-    """
-    Return the minimum of an array or minimum along an axis ignoring any NaNs.
-
-    Parameters
-    ----------
-    a : array_like
-        Array containing numbers whose minimum is desired.
-    axis : int, optional
-        Axis along which the minimum is computed.The default is to compute
-        the minimum of the flattened array.
-
-    Returns
-    -------
-    nanmin : ndarray
-        A new array or a scalar array with the result.
-
-    See Also
-    --------
-    numpy.amin : Minimum across array including any Not a Numbers.
-    numpy.nanmax : Maximum across array ignoring any Not a Numbers.
-    isnan : Shows which elements are Not a Number (NaN).
-    isfinite: Shows which elements are not: Not a Number, positive and
-             negative infinity
-
-    Notes
-    -----
-    Numpy uses the IEEE Standard for Binary Floating-Point for Arithmetic
-    (IEEE 754). This means that Not a Number is not equivalent to infinity.
-    Positive infinity is treated as a very large number and negative infinity
-    is treated as a very small (i.e. negative) number.
-
-    If the input has a integer type the function is equivalent to np.min.
-
-
-    Examples
-    --------
-    >>> a = np.array([[1, 2], [3, np.nan]])
-    >>> np.nanmin(a)
-    1.0
-    >>> np.nanmin(a, axis=0)
-    array([ 1.,  2.])
-    >>> np.nanmin(a, axis=1)
-    array([ 1.,  3.])
-
-    When positive infinity and negative infinity are present:
-
-    >>> np.nanmin([1, 2, np.nan, np.inf])
-    1.0
-    >>> np.nanmin([1, 2, np.nan, np.NINF])
-    -inf
-
-    """
-    a = np.asanyarray(a)
-    if axis is not None:
-        return np.fmin.reduce(a, axis)
-    else:
-        return np.fmin.reduce(a.flat)
-
-def nanargmin(a, axis=None):
-    """
-    Return indices of the minimum values over an axis, ignoring NaNs.
-
-    Parameters
-    ----------
-    a : array_like
-        Input data.
-    axis : int, optional
-        Axis along which to operate.  By default flattened input is used.
-
-    Returns
-    -------
-    index_array : ndarray
-        An array of indices or a single index value.
-
-    See Also
-    --------
-    argmin, nanargmax
-
-    Examples
-    --------
-    >>> a = np.array([[np.nan, 4], [2, 3]])
-    >>> np.argmin(a)
-    0
-    >>> np.nanargmin(a)
-    2
-    >>> np.nanargmin(a, axis=0)
-    array([1, 1])
-    >>> np.nanargmin(a, axis=1)
-    array([1, 0])
-
-    """
-    return _nanop(np.argmin, np.inf, a, axis)
-
-def nanmax(a, axis=None):
-    """
-    Return the maximum of an array or maximum along an axis ignoring any NaNs.
-
-    Parameters
-    ----------
-    a : array_like
-        Array containing numbers whose maximum is desired. If `a` is not
-        an array, a conversion is attempted.
-    axis : int, optional
-        Axis along which the maximum is computed. The default is to compute
-        the maximum of the flattened array.
-
-    Returns
-    -------
-    nanmax : ndarray
-        An array with the same shape as `a`, with the specified axis removed.
-        If `a` is a 0-d array, or if axis is None, a ndarray scalar is
-        returned.  The the same dtype as `a` is returned.
-
-    See Also
-    --------
-    numpy.amax : Maximum across array including any Not a Numbers.
-    numpy.nanmin : Minimum across array ignoring any Not a Numbers.
-    isnan : Shows which elements are Not a Number (NaN).
-    isfinite: Shows which elements are not: Not a Number, positive and
-             negative infinity
-
-    Notes
-    -----
-    Numpy uses the IEEE Standard for Binary Floating-Point for Arithmetic
-    (IEEE 754). This means that Not a Number is not equivalent to infinity.
-    Positive infinity is treated as a very large number and negative infinity
-    is treated as a very small (i.e. negative) number.
-
-    If the input has a integer type the function is equivalent to np.max.
-
-    Examples
-    --------
-    >>> a = np.array([[1, 2], [3, np.nan]])
-    >>> np.nanmax(a)
-    3.0
-    >>> np.nanmax(a, axis=0)
-    array([ 3.,  2.])
-    >>> np.nanmax(a, axis=1)
-    array([ 2.,  3.])
-
-    When positive infinity and negative infinity are present:
-
-    >>> np.nanmax([1, 2, np.nan, np.NINF])
-    2.0
-    >>> np.nanmax([1, 2, np.nan, np.inf])
-    inf
-
-    """
-    a = np.asanyarray(a)
-    if axis is not None:
-        return np.fmax.reduce(a, axis)
-    else:
-        return np.fmax.reduce(a.flat)
-
-def nanargmax(a, axis=None):
-    """
-    Return indices of the maximum values over an axis, ignoring NaNs.
-
-    Parameters
-    ----------
-    a : array_like
-        Input data.
-    axis : int, optional
-        Axis along which to operate.  By default flattened input is used.
-
-    Returns
-    -------
-    index_array : ndarray
-        An array of indices or a single index value.
-
-    See Also
-    --------
-    argmax, nanargmin
-
-    Examples
-    --------
-    >>> a = np.array([[np.nan, 4], [2, 3]])
-    >>> np.argmax(a)
-    0
-    >>> np.nanargmax(a)
-    1
-    >>> np.nanargmax(a, axis=0)
-    array([1, 0])
-    >>> np.nanargmax(a, axis=1)
-    array([1, 1])
-
-    """
-    return _nanop(np.argmax, -np.inf, a, axis)
-
 def disp(mesg, device=None, linefeed=True):
     """
     Display a message on a device.
@@ -1735,9 +1433,9 @@ class vectorize(object):
         Set of strings or integers representing the positional or keyword
         arguments for which the function will not be vectorized.  These will be
         passed directly to `pyfunc` unmodified.
-        
+
         .. versionadded:: 1.7.0
-    
+
     cache : bool, optional
        If `True`, then cache the first function call that determines the number
        of outputs if `otypes` is not provided.
@@ -1864,7 +1562,7 @@ class vectorize(object):
             the_args = list(args)
             def func(*vargs):
                 for _n, _i in enumerate(inds):
-                    the_args[_i] = vargs[_n] 
+                    the_args[_i] = vargs[_n]
                 kwargs.update(zip(names, vargs[len(inds):]))
                 return self.pyfunc(*the_args, **kwargs)
 
@@ -1925,7 +1623,7 @@ class vectorize(object):
             ufunc = frompyfunc(_func, len(args), nout)
 
         return ufunc, otypes
-        
+
     def _vectorize_call(self, func, args):
         """Vectorized call to `func` over positional `args`."""
         if not args:
@@ -1934,8 +1632,8 @@ class vectorize(object):
             ufunc, otypes = self._get_ufunc_and_otypes(func=func, args=args)
 
             # Convert args to object arrays first
-            inputs = [array(_a, copy=False, subok=True, dtype=object) 
-                      for _a in args]            
+            inputs = [array(_a, copy=False, subok=True, dtype=object)
+                      for _a in args]
 
             outputs = ufunc(*inputs)
 
@@ -2587,7 +2285,7 @@ def _chbevl(x, vals):
     b0 = vals[0]
     b1 = 0.0
 
-    for i in xrange(1,len(vals)):
+    for i in range(1,len(vals)):
         b2 = b1
         b1 = b0
         b0 = x*b1 - b2 + vals[i]
@@ -2915,7 +2613,7 @@ def median(a, axis=None, out=None, overwrite_input=False):
         Alternative output array in which to place the result. It must
         have the same shape and buffer length as the expected output,
         but the type (of the output) will be cast if necessary.
-    overwrite_input : bool optional
+    overwrite_input : bool, optional
        If True, then allow use of memory of input array (a) for
        calculations. The input array will be modified by the call to
        median. This will save memory when you do not need to preserve
@@ -2972,30 +2670,51 @@ def median(a, axis=None, out=None, overwrite_input=False):
     >>> assert not np.all(a==b)
 
     """
+    a = np.asarray(a)
+    if axis is not None and axis >= a.ndim:
+        raise IndexError("axis %d out of bounds (%d)" % (axis, a.ndim))
+
     if overwrite_input:
         if axis is None:
-            sorted = a.ravel()
-            sorted.sort()
+            part = a.ravel()
+            sz = part.size
+            if sz % 2 == 0:
+                szh = sz // 2
+                part.partition((szh - 1, szh))
+            else:
+                part.partition((sz - 1) // 2)
         else:
-            a.sort(axis=axis)
-            sorted = a
+            sz = a.shape[axis]
+            if sz % 2 == 0:
+                szh = sz // 2
+                a.partition((szh - 1, szh), axis=axis)
+            else:
+                a.partition((sz - 1) // 2, axis=axis)
+            part = a
     else:
-        sorted = sort(a, axis=axis)
-    if sorted.shape == ():
+        if axis is None:
+            sz = a.size
+        else:
+            sz = a.shape[axis]
+        if sz % 2 == 0:
+            part = partition(a, ((sz // 2) - 1, sz // 2), axis=axis)
+        else:
+            part = partition(a, (sz - 1) // 2, axis=axis)
+    if part.shape == ():
         # make 0-D arrays work
-        return sorted.item()
+        return part.item()
     if axis is None:
         axis = 0
-    indexer = [slice(None)] * sorted.ndim
-    index = int(sorted.shape[axis]/2)
-    if sorted.shape[axis] % 2 == 1:
+    indexer = [slice(None)] * part.ndim
+    index = part.shape[axis] // 2
+    if part.shape[axis] % 2 == 1:
         # index with slice to allow mean (below) to work
         indexer[axis] = slice(index, index+1)
     else:
         indexer[axis] = slice(index-1, index+1)
     # Use mean in odd and even case to coerce data type
     # and check, use out array.
-    return mean(sorted[indexer], axis=axis, out=out)
+    return mean(part[indexer], axis=axis, out=out)
 
 def percentile(a, q, axis=None, out=None, overwrite_input=False):
     """
@@ -3384,7 +3103,8 @@ def meshgrid(*xi, **kwargs):
 
 def delete(arr, obj, axis=None):
     """
-    Return a new array with sub-arrays along an axis deleted.
+    Return a new array with sub-arrays along an axis deleted. For a one
+    dimensional array, this returns those entries not returned by `arr[obj]`.
 
     Parameters
     ----------
@@ -3407,6 +3127,15 @@ def delete(arr, obj, axis=None):
     --------
     insert : Insert elements into an array.
     append : Append elements at the end of an array.
+
+    Notes
+    -----
+    Often it is preferable to use a boolean mask. For example:
+    >>> mask = np.ones(len(arr), dtype=bool)
+    >>> mask[[0,2,4]] = False
+    >>> result = arr[mask,...]
+    Is equivalent to `np.delete(arr, [0,2,4], axis=0)`, but allows further
+    use of `mask`.
 
     Examples
     --------
@@ -3434,7 +3163,6 @@ def delete(arr, obj, axis=None):
         except AttributeError:
             pass
 
-
     arr = asarray(arr)
     ndim = arr.ndim
     if axis is None:
@@ -3443,34 +3171,35 @@ def delete(arr, obj, axis=None):
         ndim = arr.ndim;
         axis = ndim-1;
     if ndim == 0:
+        warnings.warn("in the future the special handling of scalars "
+                      "will be removed from delete and raise an error",
+                      DeprecationWarning)
         if wrap:
             return wrap(arr)
         else:
             return arr.copy()
+
     slobj = [slice(None)]*ndim
     N = arr.shape[axis]
     newshape = list(arr.shape)
-    if isinstance(obj, (int, long, integer)):
-        if (obj < 0): obj += N
-        if (obj < 0 or obj >=N):
-            raise ValueError(
-                    "invalid entry")
-        newshape[axis]-=1;
-        new = empty(newshape, arr.dtype, arr.flags.fnc)
-        slobj[axis] = slice(None, obj)
-        new[slobj] = arr[slobj]
-        slobj[axis] = slice(obj,None)
-        slobj2 = [slice(None)]*ndim
-        slobj2[axis] = slice(obj+1,None)
-        new[slobj] = arr[slobj2]
-    elif isinstance(obj, slice):
+
+    if isinstance(obj, slice):
         start, stop, step = obj.indices(N)
-        numtodel = len(xrange(start, stop, step))
+        xr = range(start, stop, step)
+        numtodel = len(xr)
+
         if numtodel <= 0:
             if wrap:
-                return wrap(new)
+                return wrap(arr.copy())
             else:
                 return arr.copy()
+
+        # Invert if step is negative:
+        if step < 0:
+            step = -step
+            start = xr[-1]
+            stop = xr[0] + 1
+
         newshape[axis] -= numtodel
         new = empty(newshape, arr.dtype, arr.flags.fnc)
         # copy initial chunk
@@ -3491,23 +3220,76 @@ def delete(arr, obj, axis=None):
         if step == 1:
             pass
         else:  # use array indexing.
-            obj = arange(start, stop, step, dtype=intp)
-            all = arange(start, stop, dtype=intp)
-            obj = setdiff1d(all, obj)
+            keep = ones(stop-start, dtype=bool)
+            keep[:stop-start:step] = False
             slobj[axis] = slice(start, stop-numtodel)
             slobj2 = [slice(None)]*ndim
-            slobj2[axis] = obj
+            slobj2[axis] = slice(start, stop)
+            arr = arr[slobj2]
+            slobj2[axis] = keep
             new[slobj] = arr[slobj2]
-    else: # default behavior
-        obj = array(obj, dtype=intp, copy=0, ndmin=1)
-        all = arange(N, dtype=intp)
-        obj = setdiff1d(all, obj)
-        slobj[axis] = obj
+        if wrap:
+            return wrap(new)
+        else:
+            return new
+
+    _obj = obj
+    obj = np.asarray(obj)
+    # After removing the special handling of booleans and out of
+    # bounds values, the conversion to the array can be removed.
+    if obj.dtype == bool:
+        warnings.warn("in the future insert will treat boolean arrays "
+                      "and array-likes as boolean index instead "
+                      "of casting it to integer", FutureWarning)
+        obj = obj.astype(intp)
+    if isinstance(_obj, (int, long, integer)):
+        # optimization for a single value
+        obj = obj.item()
+        if (obj < -N or obj >=N):
+            raise IndexError("index %i is out of bounds for axis "
+                             "%i with size %i" % (obj, axis, N))
+        if (obj < 0): obj += N
+        newshape[axis]-=1;
+        new = empty(newshape, arr.dtype, arr.flags.fnc)
+        slobj[axis] = slice(None, obj)
+        new[slobj] = arr[slobj]
+        slobj[axis] = slice(obj,None)
+        slobj2 = [slice(None)]*ndim
+        slobj2[axis] = slice(obj+1,None)
+        new[slobj] = arr[slobj2]
+    else:
+        if obj.size == 0 and not isinstance(_obj, np.ndarray):
+            obj = obj.astype(intp)
+        if not np.can_cast(obj, intp, 'same_kind'):
+            # obj.size = 1 special case always failed and would just
+            # give superfluous warnings.
+            warnings.warn("using a non-integer array as obj in delete "
+                "will result in an error in the future", DeprecationWarning)
+            obj = obj.astype(intp)
+        keep = ones(N, dtype=bool)
+
+        # Test if there are out of bound indices, this is deprecated
+        inside_bounds = (obj < N) & (obj >= -N)
+        if not inside_bounds.all():
+            warnings.warn("in the future out of bounds indices will raise an "
+                          "error instead of being ignored by `numpy.delete`.",
+                          DeprecationWarning)
+            obj = obj[inside_bounds]
+        positive_indices = obj >= 0
+        if not positive_indices.all():
+            warnings.warn("in the future negative indices will not be ignored "
+                          "by `numpy.delete`.", FutureWarning)
+            obj = obj[positive_indices]
+
+        keep[obj,] = False
+        slobj[axis] = keep
         new = arr[slobj]
+
     if wrap:
         return wrap(new)
     else:
         return new
+
 
 def insert(arr, obj, values, axis=None):
     """
@@ -3520,9 +3302,16 @@ def insert(arr, obj, values, axis=None):
     obj : int, slice or sequence of ints
         Object that defines the index or indices before which `values` is
         inserted.
+
+        .. versionadded:: 1.8.0
+
+        Support for multiple insertions when `obj` is a single scalar or a
+        sequence with one element (similar to calling insert multiple times).
     values : array_like
         Values to insert into `arr`. If the type of `values` is different
         from that of `arr`, `values` is converted to the type of `arr`.
+        `values` should be shaped so that ``arr[...,obj,...] = values``
+        is legal.
     axis : int, optional
         Axis along which to insert `values`.  If `axis` is None then `arr`
         is flattened first.
@@ -3537,7 +3326,14 @@ def insert(arr, obj, values, axis=None):
     See Also
     --------
     append : Append elements at the end of an array.
+    concatenate : Join a sequence of arrays together.
     delete : Delete elements from an array.
+
+    Notes
+    -----
+    Note that for higher dimensional inserts `obj=0` behaves very different
+    from `obj=[0]` just like `arr[:,0,:] = values` is different from
+    `arr[:,[0],:] = values`.
 
     Examples
     --------
@@ -3552,6 +3348,15 @@ def insert(arr, obj, values, axis=None):
     array([[1, 5, 1],
            [2, 5, 2],
            [3, 5, 3]])
+
+    Difference between sequence and scalars:
+    >>> np.insert(a, [1], [[1],[2],[3]], axis=1)
+    array([[1, 1, 1],
+           [2, 2, 2],
+           [3, 3, 3]])
+    >>> np.array_equal(np.insert(a, 1, [1, 2, 3], axis=1),
+    ...                np.insert(a, [1], [[1],[2],[3]], axis=1))
+    True
 
     >>> b = a.flatten()
     >>> b
@@ -3586,7 +3391,15 @@ def insert(arr, obj, values, axis=None):
             arr = arr.ravel()
         ndim = arr.ndim
         axis = ndim-1
+    else:
+        if ndim > 0 and (axis < -ndim or axis >= ndim):
+            raise IndexError("axis %i is out of bounds for an array "
+                             "of dimension %i" % (axis, ndim))
+        if (axis < 0): axis += ndim
     if (ndim == 0):
+        warnings.warn("in the future the special handling of scalars "
+                      "will be removed from insert and raise an error",
+                      DeprecationWarning)
         arr = arr.copy()
         arr[...] = values
         if wrap:
@@ -3597,38 +3410,77 @@ def insert(arr, obj, values, axis=None):
     N = arr.shape[axis]
     newshape = list(arr.shape)
 
-    if isinstance(obj, (int, long, integer)):
-        if (obj < 0): obj += N
-        if obj < 0 or obj > N:
-            raise ValueError(
-                    "index (%d) out of range (0<=index<=%d) "\
-                    "in dimension %d" % (obj, N, axis))
-        if isscalar(values):
-            obj = [obj]
-        else:
-            values = asarray(values)
-            if ndim > values.ndim:
-                obj = [obj]
-            else:
-                obj = [obj] * len(values)
-
-    elif isinstance(obj, slice):
+    if isinstance(obj, slice):
         # turn it into a range object
-        obj = arange(*obj.indices(N),**{'dtype':intp})
+        indices = arange(*obj.indices(N),**{'dtype':intp})
+    else:
+        # need to copy obj, because indices will be changed in-place
+        indices = np.array(obj)
+        if indices.dtype == bool:
+            # See also delete
+            warnings.warn("in the future insert will treat boolean arrays "
+                          "and array-likes as a boolean index instead "
+                          "of casting it to integer", FutureWarning)
+            indices = indices.astype(intp)
+            # Code after warning period:
+            #if obj.ndim != 1:
+            #    raise ValueError('boolean array argument obj to insert '
+            #                     'must be one dimensional')
+            #indices = np.flatnonzero(obj)
+        elif indices.ndim > 1:
+            raise ValueError("index array argument obj to insert must "
+                             "be one dimensional or scalar")
+    if indices.size == 1:
+        index = indices.item()
+        if index < -N or index > N:
+            raise IndexError("index %i is out of bounds for axis "
+                             "%i with size %i" % (obj, axis, N))
+        if (index < 0): index += N
 
-    # get two sets of indices
-    #  one is the indices which will hold the new stuff
-    #  two is the indices where arr will be copied over
+        values = array(values, copy=False, ndmin=arr.ndim)
+        if indices.ndim == 0:
+            # broadcasting is very different here, since a[:,0,:] = ... behaves
+            # very different from a[:,[0],:] = ...! This changes values so that
+            # it works likes the second case. (here a[:,0:1,:])
+            values = np.rollaxis(values, 0, axis + 1)
+        numnew = values.shape[axis]
+        newshape[axis] += numnew
+        new = empty(newshape, arr.dtype, arr.flags.fnc)
+        slobj[axis] = slice(None, index)
+        new[slobj] = arr[slobj]
+        slobj[axis] = slice(index, index+numnew)
+        new[slobj] = values
+        slobj[axis] = slice(index+numnew, None)
+        slobj2 = [slice(None)] * ndim
+        slobj2[axis] = slice(index, None)
+        new[slobj] = arr[slobj2]
+        if wrap:
+            return wrap(new)
+        return new
+    elif indices.size == 0 and not isinstance(obj, np.ndarray):
+        # Can safely cast the empty list to intp
+        indices = indices.astype(intp)
 
-    obj = asarray(obj, dtype=intp)
-    numnew = len(obj)
-    index1 = obj + arange(numnew)
-    index2 = setdiff1d(arange(numnew+N),index1)
+    if not np.can_cast(indices, intp, 'same_kind'):
+        warnings.warn("using a non-integer array as obj in insert "
+                      "will result in an error in the future",
+                      DeprecationWarning)
+        indices = indices.astype(intp)
+
+    indices[indices < 0] += N
+
+    numnew = len(indices)
+    order = indices.argsort(kind='mergesort') # stable sort
+    indices[order] += np.arange(numnew)
+
     newshape[axis] += numnew
+    old_mask = ones(newshape[axis], dtype=bool)
+    old_mask[indices] = False
+
     new = empty(newshape, arr.dtype, arr.flags.fnc)
     slobj2 = [slice(None)]*ndim
-    slobj[axis] = index1
-    slobj2[axis] = index2
+    slobj[axis] = indices
+    slobj2[axis] = old_mask
     new[slobj] = values
     new[slobj2] = arr
 

@@ -1,30 +1,35 @@
-# Module containing non-deprecated functions borrowed from Numeric.
-__docformat__ = "restructuredtext en"
+"""Module containing non-deprecated functions borrowed from Numeric.
 
-# functions that are now methods
-__all__ = ['take', 'reshape', 'choose', 'repeat', 'put',
-           'swapaxes', 'transpose', 'sort', 'argsort', 'argmax', 'argmin',
-           'searchsorted', 'alen',
-           'resize', 'diagonal', 'trace', 'ravel', 'nonzero', 'shape',
-           'compress', 'clip', 'sum', 'product', 'prod', 'sometrue', 'alltrue',
-           'any', 'all', 'cumsum', 'cumproduct', 'cumprod', 'ptp', 'ndim',
-           'rank', 'size', 'around', 'round_', 'mean', 'std', 'var', 'squeeze',
-           'amax', 'amin',
-          ]
-
-import multiarray as mu
-import umath as um
-import numerictypes as nt
-from numeric import asarray, array, asanyarray, concatenate
-import _methods
-_dt_ = nt.sctype2char
+"""
+from __future__ import division, absolute_import, print_function
 
 import types
+
+from . import multiarray as mu
+from . import umath as um
+from . import numerictypes as nt
+from .numeric import asarray, array, asanyarray, concatenate
+from . import _methods
+
+_dt_ = nt.sctype2char
+
+
+# functions that are methods
+__all__ = [
+        'alen', 'all', 'alltrue', 'amax', 'amin', 'any', 'argmax',
+        'argmin', 'argpartition', 'argsort', 'around', 'choose', 'clip',
+        'compress', 'cumprod', 'cumproduct', 'cumsum', 'diagonal', 'mean',
+        'ndim', 'nonzero', 'partition', 'prod', 'product', 'ptp', 'put',
+        'rank', 'ravel', 'repeat', 'reshape', 'resize', 'round_',
+        'searchsorted', 'shape', 'size', 'sometrue', 'sort', 'squeeze',
+        'std', 'sum', 'swapaxes', 'take', 'trace', 'transpose', 'var',
+        ]
+
 
 try:
     _gentype = types.GeneratorType
 except AttributeError:
-    _gentype = types.NoneType
+    _gentype = type(None)
 
 # save away Python sum
 _sum_ = sum
@@ -57,9 +62,9 @@ def take(a, indices, axis=None, out=None, mode='raise'):
         The source array.
     indices : array_like
         The indices of the values to extract.
-        
+
         .. versionadded:: 1.8.0
-        
+
         Also allow scalars for indices.
     axis : int, optional
         The axis over which to select values. By default, the flattened
@@ -128,16 +133,23 @@ def reshape(a, newshape, order='C'):
         One shape dimension can be -1. In this case, the value is inferred
         from the length of the array and remaining dimensions.
     order : {'C', 'F', 'A'}, optional
-        Determines whether the array data should be viewed as in C
-        (row-major) order, FORTRAN (column-major) order, or the C/FORTRAN
-        order should be preserved.
+        Read the elements of `a` using this index order, and place the elements
+        into the reshaped array using this index order.  'C' means to
+        read / write the elements using C-like index order, with the last axis index
+        changing fastest, back to the first axis index changing slowest.  'F'
+        means to read / write the elements using Fortran-like index order, with
+        the first index changing fastest, and the last index changing slowest.
+        Note that the 'C' and 'F' options take no account of the memory layout
+        of the underlying array, and only refer to the order of indexing.  'A'
+        means to read / write the elements in Fortran-like index order if `a` is
+        Fortran *contiguous* in memory, C-like order otherwise.
 
     Returns
     -------
     reshaped_array : ndarray
         This will be a new view object if possible; otherwise, it will
-        be a copy.
-
+        be a copy.  Note there is no guarantee of the *memory layout* (C- or
+        Fortran- contiguous) of the returned array.
 
     See Also
     --------
@@ -145,7 +157,6 @@ def reshape(a, newshape, order='C'):
 
     Notes
     -----
-
     It is not always possible to change the shape of an array without
     copying the data. If you want an error to be raise if the data is copied,
     you should assign the new shape to the shape attribute of the array::
@@ -153,12 +164,39 @@ def reshape(a, newshape, order='C'):
      >>> a = np.zeros((10, 2))
      # A transpose make the array non-contiguous
      >>> b = a.T
-     # Taking a view makes it possible to modify the shape without modiying the
+     # Taking a view makes it possible to modify the shape without modifying the
      # initial object.
      >>> c = b.view()
      >>> c.shape = (20)
      AttributeError: incompatible shape for a non-contiguous array
 
+    The `order` keyword gives the index ordering both for *fetching* the values
+    from `a`, and then *placing* the values into the output array.  For example,
+    let's say you have an array:
+
+    >>> a = np.arange(6).reshape((3, 2))
+    >>> a
+    array([[0, 1],
+           [2, 3],
+           [4, 5]])
+
+    You can think of reshaping as first raveling the array (using the given
+    index order), then inserting the elements from the raveled array into the
+    new array using the same kind of index ordering as was used for the
+    raveling.
+
+    >>> np.reshape(a, (2, 3)) # C-like index ordering
+    array([[0, 1, 2],
+           [3, 4, 5]])
+    >>> np.reshape(np.ravel(a), (2, 3)) # equivalent to C ravel then C reshape
+    array([[0, 1, 2],
+           [3, 4, 5]])
+    >>> np.reshape(a, (2, 3), order='F') # Fortran-like index ordering
+    array([[0, 4, 3],
+           [2, 1, 5]])
+    >>> np.reshape(np.ravel(a, order='F'), (2, 3), order='F')
+    array([[0, 4, 3],
+           [2, 1, 5]])
 
     Examples
     --------
@@ -172,7 +210,6 @@ def reshape(a, newshape, order='C'):
     array([[1, 2],
            [3, 4],
            [5, 6]])
-
     """
     try:
         reshape = a.reshape
@@ -495,6 +532,150 @@ def transpose(a, axes=None):
     except AttributeError:
         return _wrapit(a, 'transpose', axes)
     return transpose(axes)
+
+
+def partition(a, kth, axis=-1, kind='introselect', order=None):
+    """
+    Return a partitioned copy of an array.
+
+    Creates a copy of the array with its elements rearranged in such a way that
+    the value of the element in kth position is in the position it would be in
+    a sorted array. All elements smaller than the kth element are moved before
+    this element and all equal or greater are moved behind it. The ordering of
+    the elements in the two partitions is undefined.
+
+    .. versionadded:: 1.8.0
+
+    Parameters
+    ----------
+    a : array_like
+        Array to be sorted.
+    kth : int or sequence of ints
+        Element index to partition by. The kth value of the element will be in
+        its final sorted position and all smaller elements will be moved before
+        it and all equal or greater elements behind it.
+        The order all elements in the partitions is undefined.
+        If provided with a sequence of kth it will partition all elements
+        indexed by kth  of them into their sorted position at once.
+    axis : int or None, optional
+        Axis along which to sort. If None, the array is flattened before
+        sorting. The default is -1, which sorts along the last axis.
+    kind : {'introselect'}, optional
+        Selection algorithm. Default is 'introselect'.
+    order : list, optional
+        When `a` is a structured array, this argument specifies which fields
+        to compare first, second, and so on.  This list does not need to
+        include all of the fields.
+
+    Returns
+    -------
+    partitioned_array : ndarray
+        Array of the same type and shape as `a`.
+
+    See Also
+    --------
+    ndarray.partition : Method to sort an array in-place.
+    argpartition : Indirect partition.
+
+    Notes
+    -----
+    The various selection algorithms are characterized by their average speed,
+    worst case performance, work space size, and whether they are stable. A
+    stable sort keeps items with the same key in the same relative order. The
+    three available algorithms have the following properties:
+
+    ================= ======= ============= ============ =======
+       kind            speed   worst case    work space  stable
+    ================= ======= ============= ============ =======
+    'introselect'        1        O(n)           0         no
+    ================= ======= ============= ============ =======
+
+    All the partition algorithms make temporary copies of the data when
+    partitioning along any but the last axis.  Consequently, partitioning
+    along the last axis is faster and uses less space than partitioning
+    along any other axis.
+
+    The sort order for complex numbers is lexicographic. If both the real
+    and imaginary parts are non-nan then the order is determined by the
+    real parts except when they are equal, in which case the order is
+    determined by the imaginary parts.
+
+    Examples
+    --------
+    >>> a = np.array([3, 4, 2, 1])
+    >>> np.partition(a, 3)
+    array([2, 1, 3, 4])
+
+    >>> np.partition(a, (1, 3))
+    array([1, 2, 3, 4])
+
+    """
+    if axis is None:
+        a = asanyarray(a).flatten()
+        axis = 0
+    else:
+        a = asanyarray(a).copy()
+    a.partition(kth, axis=axis, kind=kind, order=order)
+    return a
+
+
+def argpartition(a, kth, axis=-1, kind='introselect', order=None):
+    """
+    Perform an indirect partition along the given axis using the algorithm
+    specified by the `kind` keyword. It returns an array of indices of the
+    same shape as `a` that index data along the given axis in partitioned
+    order.
+
+    .. versionadded:: 1.8.0
+
+    Parameters
+    ----------
+    a : array_like
+        Array to sort.
+    kth : int or sequence of ints
+        Element index to partition by. The kth element will be in its final
+        sorted position and all smaller elements will be moved before it and
+        all larger elements behind it.
+        The order all elements in the partitions is undefined.
+        If provided with a sequence of kth it will partition all of them into
+        their sorted position at once.
+    axis : int or None, optional
+        Axis along which to sort.  The default is -1 (the last axis). If None,
+        the flattened array is used.
+    kind : {'introselect'}, optional
+        Selection algorithm. Default is 'introselect'
+    order : list, optional
+        When `a` is an array with fields defined, this argument specifies
+        which fields to compare first, second, etc.  Not all fields need be
+        specified.
+
+    Returns
+    -------
+    index_array : ndarray, int
+        Array of indices that partition `a` along the specified axis.
+        In other words, ``a[index_array]`` yields a sorted `a`.
+
+    See Also
+    --------
+    partition : Describes partition algorithms used.
+    ndarray.partition : Inplace partition.
+
+    Notes
+    -----
+    See `partition` for notes on the different selection algorithms.
+
+    Examples
+    --------
+    One dimensional array:
+
+    >>> x = np.array([3, 4, 2, 1])
+    >>> x[np.argpartition(x, 3)]
+    array([2, 1, 3, 4])
+    >>> x[np.argpartition(x, (1, 3))]
+    array([1, 2, 3, 4])
+
+    """
+    return a.argpartition(kth, axis, kind=kind, order=order)
 
 
 def sort(a, axis=-1, kind='quicksort', order=None):
@@ -948,10 +1129,10 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     on this fact is deprecated. Writing to the resulting array continues to
     work as it used to, but a FutureWarning will be issued.
 
-    In NumPy 1.8, it will switch to returning a read-only view on the original
+    In NumPy 1.9, it will switch to returning a read-only view on the original
     array. Attempting to write to the resulting array will produce an error.
 
-    In NumPy 1.9, it will still return a view, but this view will no longer be
+    In NumPy 1.10, it will still return a view, but this view will no longer be
     marked read-only. Writing to the returned array will alter your original
     array as well.
 
@@ -1103,21 +1284,25 @@ def ravel(a, order='C'):
     Parameters
     ----------
     a : array_like
-        Input array.  The elements in ``a`` are read in the order specified by
+        Input array.  The elements in `a` are read in the order specified by
         `order`, and packed as a 1-D array.
     order : {'C','F', 'A', 'K'}, optional
-        The elements of ``a`` are read in this order. 'C' means to view
-        the elements in C (row-major) order. 'F' means to view the elements
-        in Fortran (column-major) order. 'A' means to view the elements
-        in 'F' order if a is Fortran contiguous, 'C' order otherwise.
-        'K' means to view the elements in the order they occur in memory,
-        except for reversing the data when strides are negative.
-        By default, 'C' order is used.
+        The elements of `a` are read using this index order. 'C' means to
+        index the elements in C-like order, with the last axis index changing
+        fastest, back to the first axis index changing slowest.   'F' means to
+        index the elements in Fortran-like index order, with the first index
+        changing fastest, and the last index changing slowest. Note that the 'C'
+        and 'F' options take no account of the memory layout of the underlying
+        array, and only refer to the order of axis indexing.  'A' means to read
+        the elements in Fortran-like index order if `a` is Fortran *contiguous*
+        in memory, C-like order otherwise.  'K' means to read the elements in
+        the order they occur in memory, except for reversing the data when
+        strides are negative.  By default, 'C' index order is used.
 
     Returns
     -------
     1d_array : ndarray
-        Output of the same dtype as `a`, and of shape ``(a.size(),)``.
+        Output of the same dtype as `a`, and of shape ``(a.size,)``.
 
     See Also
     --------
@@ -1127,11 +1312,11 @@ def ravel(a, order='C'):
 
     Notes
     -----
-    In row-major order, the row index varies the slowest, and the column
-    index the quickest.  This can be generalized to multiple dimensions,
-    where row-major order implies that the index along the first axis
-    varies slowest, and the index along the last quickest.  The opposite holds
-    for Fortran-, or column-major, mode.
+    In C-like (row-major) order, in two dimensions, the row index varies the
+    slowest, and the column index the quickest.  This can be generalized to
+    multiple dimensions, where row-major order implies that the index along the
+    first axis varies slowest, and the index along the last quickest.  The
+    opposite holds for Fortran-like, or column-major, index ordering.
 
     Examples
     --------
@@ -1337,7 +1522,8 @@ def compress(condition, a, axis=None, out=None):
     See Also
     --------
     take, choose, diag, diagonal, select
-    ndarray.compress : Equivalent method.
+    ndarray.compress : Equivalent method in ndarray
+    np.extract: Equivalent method when working on 1-D arrays
     numpy.doc.ufuncs : Section "Output arguments"
 
     Examples
@@ -1511,7 +1697,7 @@ def sum(a, axis=None, dtype=None, out=None, keepdims=False):
             out[...] = res
             return out
         return res
-    elif not (type(a) is mu.ndarray):
+    elif type(a) is not mu.ndarray:
         try:
             sum = a.sum
         except AttributeError:
@@ -1760,6 +1946,8 @@ def cumsum (a, axis=None, dtype=None, out=None):
 
     trapz : Integration of array values using the composite trapezoidal rule.
 
+    diff :  Calculate the n-th order discrete difference along given axis.
+
     Notes
     -----
     Arithmetic is modular when using integer types, and no error is
@@ -1862,11 +2050,11 @@ def amax(a, axis=None, out=None, keepdims=False):
     a : array_like
         Input data.
     axis : int, optional
-        Axis along which to operate.  By default flattened input is used.
+        Axis along which to operate.  By default, flattened input is used.
     out : ndarray, optional
-        Alternate output array in which to place the result.  Must be of
-        the same shape and buffer length as the expected output.  See
-        `doc.ufuncs` (Section "Output arguments") for more details.
+        Alternative output array in which to place the result.  Must
+        be of the same shape and buffer length as the expected output.
+        See `doc.ufuncs` (Section "Output arguments") for more details.
     keepdims : bool, optional
         If this is set to True, the axes which are reduced are left
         in the result as dimensions with size one. With this option,
@@ -1881,15 +2069,28 @@ def amax(a, axis=None, out=None, keepdims=False):
 
     See Also
     --------
-    nanmax : NaN values are ignored instead of being propagated.
-    fmax : same behavior as the C99 fmax function.
-    argmax : indices of the maximum values.
+    amin :
+        The minimum value of an array along a given axis, propagating any NaNs.
+    nanmax :
+        The maximum value of an array along a given axis, ignoring any NaNs.
+    maximum :
+        Element-wise maximum of two arrays, propagating any NaNs.
+    fmax :
+        Element-wise maximum of two arrays, ignoring any NaNs.
+    argmax : 
+        Return the indices of the maximum values.
+    
+    nanmin, minimum, fmin
 
     Notes
     -----
     NaN values are propagated, that is if at least one item is NaN, the
-    corresponding max value will be NaN as well.  To ignore NaN values
+    corresponding max value will be NaN as well. To ignore NaN values
     (MATLAB behavior), please use nanmax.
+    
+    Don't use `amax` for element-wise comparison of 2 arrays; when
+    ``a.shape[0]`` is 2, ``maximum(a[0], a[1])`` is faster than 
+    ``amax(a, axis=0)``.
 
     Examples
     --------
@@ -1897,11 +2098,11 @@ def amax(a, axis=None, out=None, keepdims=False):
     >>> a
     array([[0, 1],
            [2, 3]])
-    >>> np.amax(a)
+    >>> np.amax(a)           # Maximum of the flattened array
     3
-    >>> np.amax(a, axis=0)
+    >>> np.amax(a, axis=0)   # Maxima along the first axis
     array([2, 3])
-    >>> np.amax(a, axis=1)
+    >>> np.amax(a, axis=1)   # Maxima along the second axis
     array([1, 3])
 
     >>> b = np.arange(5, dtype=np.float)
@@ -1912,13 +2113,13 @@ def amax(a, axis=None, out=None, keepdims=False):
     4.0
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             amax = a.max
         except AttributeError:
             return _methods._amax(a, axis=axis,
                                 out=out, keepdims=keepdims)
-        # NOTE: Dropping and keepdims parameter
+        # NOTE: Dropping the keepdims parameter
         return amax(axis=axis, out=out)
     else:
         return _methods._amax(a, axis=axis,
@@ -1933,7 +2134,7 @@ def amin(a, axis=None, out=None, keepdims=False):
     a : array_like
         Input data.
     axis : int, optional
-        Axis along which to operate.  By default a flattened input is used.
+        Axis along which to operate.  By default, flattened input is used.
     out : ndarray, optional
         Alternative output array in which to place the result.  Must
         be of the same shape and buffer length as the expected output.
@@ -1945,22 +2146,35 @@ def amin(a, axis=None, out=None, keepdims=False):
 
     Returns
     -------
-    amin : ndarray
-        A new array or a scalar array with the result.
+    amin : ndarray or scalar
+        Minimum of `a`. If `axis` is None, the result is a scalar value.
+        If `axis` is given, the result is an array of dimension
+        ``a.ndim - 1``.
 
     See Also
     --------
-    nanmin: nan values are ignored instead of being propagated
-    fmin: same behavior as the C99 fmin function
-    argmin: Return the indices of the minimum values.
+    amax :
+        The maximum value of an array along a given axis, propagating any NaNs.
+    nanmin :
+        The minimum value of an array along a given axis, ignoring any NaNs.
+    minimum :
+        Element-wise minimum of two arrays, propagating any NaNs.
+    fmin :
+        Element-wise minimum of two arrays, ignoring any NaNs.
+    argmin : 
+        Return the indices of the minimum values.
 
-    amax, nanmax, fmax
+    nanmax, maximum, fmax
 
     Notes
     -----
-    NaN values are propagated, that is if at least one item is nan, the
-    corresponding min value will be nan as well. To ignore NaN values (matlab
-    behavior), please use nanmin.
+    NaN values are propagated, that is if at least one item is NaN, the
+    corresponding min value will be NaN as well. To ignore NaN values
+    (MATLAB behavior), please use nanmin.
+    
+    Don't use `amin` for element-wise comparison of 2 arrays; when 
+    ``a.shape[0]`` is 2, ``minimum(a[0], a[1])`` is faster than 
+    ``amin(a, axis=0)``.
 
     Examples
     --------
@@ -1970,9 +2184,9 @@ def amin(a, axis=None, out=None, keepdims=False):
            [2, 3]])
     >>> np.amin(a)           # Minimum of the flattened array
     0
-    >>> np.amin(a, axis=0)         # Minima along the first axis
+    >>> np.amin(a, axis=0)   # Minima along the first axis
     array([0, 1])
-    >>> np.amin(a, axis=1)         # Minima along the second axis
+    >>> np.amin(a, axis=1)   # Minima along the second axis
     array([0, 2])
 
     >>> b = np.arange(5, dtype=np.float)
@@ -1983,7 +2197,7 @@ def amin(a, axis=None, out=None, keepdims=False):
     0.0
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             amin = a.min
         except AttributeError:
@@ -2113,7 +2327,7 @@ def prod(a, axis=None, dtype=None, out=None, keepdims=False):
     True
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             prod = a.prod
         except AttributeError:
@@ -2450,6 +2664,7 @@ def mean(a, axis=None, dtype=None, out=None, keepdims=False):
     See Also
     --------
     average : Weighted average
+    std, var, nanmean, nanstd, nanvar
 
     Notes
     -----
@@ -2486,7 +2701,7 @@ def mean(a, axis=None, dtype=None, out=None, keepdims=False):
     0.55000000074505806
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             mean = a.mean
             return mean(axis=axis, dtype=dtype, out=out)
@@ -2495,7 +2710,6 @@ def mean(a, axis=None, dtype=None, out=None, keepdims=False):
 
     return _methods._mean(a, axis=axis, dtype=dtype,
                             out=out, keepdims=keepdims)
-
 
 def std(a, axis=None, dtype=None, out=None, ddof=0, keepdims=False):
     """
@@ -2537,7 +2751,7 @@ def std(a, axis=None, dtype=None, out=None, ddof=0, keepdims=False):
 
     See Also
     --------
-    var, mean
+    var, mean, nanmean, nanstd, nanvar
     numpy.doc.ufuncs : Section "Output arguments"
 
     Notes
@@ -2588,7 +2802,7 @@ def std(a, axis=None, dtype=None, out=None, ddof=0, keepdims=False):
     0.44999999925552653
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             std = a.std
             return std(axis=axis, dtype=dtype, out=out, ddof=ddof)
@@ -2640,8 +2854,7 @@ def var(a, axis=None, dtype=None, out=None, ddof=0,
 
     See Also
     --------
-    std : Standard deviation
-    mean : Average
+    std , mean, nanmean, nanstd, nanvar
     numpy.doc.ufuncs : Section "Output arguments"
 
     Notes
@@ -2691,7 +2904,7 @@ def var(a, axis=None, dtype=None, out=None, ddof=0,
     0.20250000000000001
 
     """
-    if not (type(a) is mu.ndarray):
+    if type(a) is not mu.ndarray:
         try:
             var = a.var
             return var(axis=axis, dtype=dtype, out=out, ddof=ddof)
@@ -2700,3 +2913,4 @@ def var(a, axis=None, dtype=None, out=None, ddof=0,
 
     return _methods._var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
                                 keepdims=keepdims)
+

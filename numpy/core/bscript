@@ -15,9 +15,6 @@ waflib.Logs.verbose = 1
 # context.
 import numpy.build_utils.waf
 
-from numpy.distutils.conv_template \
-    import \
-        process_str as process_c_str
 from code_generators.numpy_api \
     import \
         multiarray_api, ufunc_api
@@ -31,6 +28,7 @@ from setup_common \
         MANDATORY_FUNCS, C_ABI_VERSION, C_API_VERSION
 
 ENABLE_SEPARATE_COMPILATION = (os.environ.get('NPY_SEPARATE_COMPILATION', "1") != "0")
+NPY_RELAXED_STRIDES_CHECKING = (os.environ.get('NPY_RELAXED_STRIDES_CHECKING', "0") != "0")
 
 NUMPYCONFIG_SYM = []
 
@@ -39,6 +37,12 @@ if ENABLE_SEPARATE_COMPILATION:
     NUMPYCONFIG_SYM.append(('DEFINE_NPY_ENABLE_SEPARATE_COMPILATION', '#define NPY_ENABLE_SEPARATE_COMPILATION 1'))
 else:
     NUMPYCONFIG_SYM.append(('DEFINE_NPY_ENABLE_SEPARATE_COMPILATION', ''))
+
+if NPY_RELAXED_STRIDES_CHECKING:
+    NUMPYCONFIG_SYM.append(('DEFINE_NPY_RELAXED_STRIDES_CHECKING', '#define NPY_RELAXED_STRIDES_CHECKING 1'))
+else:
+    NUMPYCONFIG_SYM.append(('DEFINE_NPY_RELAXED_STRIDES_CHECKING', ''))
+
 NUMPYCONFIG_SYM.append(('VISIBILITY_HIDDEN', '__attribute__((visibility("hidden")))'))
 
 NUMPYCONFIG_SYM.append(('NPY_ABI_VERSION', '0x%.8X' % C_ABI_VERSION))
@@ -318,25 +322,6 @@ def post_configure(context):
     # FIXME: Should be handled in bento context
     conf.store()
 
-class CTemplateTask(waflib.Task.Task):
-    color = 'BLUE'
-    before = ['c']
-    def run(self):
-        s = self.inputs[0]
-        cnt = s.read()
-        writestr = process_c_str(cnt)
-        o = self.outputs[0]
-        o.write(writestr)
-
-@waflib.TaskGen.extension(".src")
-def c_template(self, node):
-    outs = []
-    outs.append(node.change_ext(""))
-
-    tsk = self.create_task('CTemplateTask', node, outs)
-    if "c" in self.features:
-        self.source.append(outs[0])
-
 class numpy_api_generator(Task):
     vars = ["API_TUPLE"]
     color = "BLUE"
@@ -507,8 +492,10 @@ def pre_build(context):
             pattern="ufunc_api",
             name="ufunc_api")
 
-        ufunc_templates = ["src/umath/loops.c.src",
-                "src/umath/funcs.inc.src"]
+        ufunc_templates = [
+            "src/umath/loops.c.src",
+            "src/umath/funcs.inc.src",
+            "src/umath/simd.inc.src"]
         bld(target="ufunc_templates", source=ufunc_templates)
 
         bld(features="umath_gen",

@@ -165,13 +165,13 @@ with misaligned data.
     at least *aobj* ->nd in size). You may want to typecast the
     returned pointer to the data type of the ndarray.
 
-.. cfunction:: void* PyArray_GETPTR1(PyObject* obj, <npy_intp> i)
+.. cfunction:: void* PyArray_GETPTR1(PyArrayObject* obj, npy_intp i)
 
-.. cfunction:: void* PyArray_GETPTR2(PyObject* obj, <npy_intp> i, <npy_intp> j)
+.. cfunction:: void* PyArray_GETPTR2(PyArrayObject* obj, npy_intp i, npy_intp j)
 
-.. cfunction:: void* PyArray_GETPTR3(PyObject* obj, <npy_intp> i, <npy_intp> j, <npy_intp> k)
+.. cfunction:: void* PyArray_GETPTR3(PyArrayObject* obj, npy_intp i, npy_intp j, npy_intp k)
 
-.. cfunction:: void* PyArray_GETPTR4(PyObject* obj, <npy_intp> i, <npy_intp> j, <npy_intp> k, <npy_intp> l)
+.. cfunction:: void* PyArray_GETPTR4(PyArrayObject* obj, npy_intp i, npy_intp j, npy_intp k, npy_intp l)
 
     Quick, inline access to the element at the given coordinates in
     the ndarray, *obj*, which must have respectively 1, 2, 3, or 4
@@ -335,10 +335,12 @@ From scratch
 
     .. versionadded:: 1.7
 
+    This function **steals a reference** to ``obj`` and sets it as the
+    base property of ``arr``.
+
     If you construct an array by passing in your own memory buffer as
     a parameter, you need to set the array's `base` property to ensure
-    the lifetime of the memory buffer is appropriate. This function
-    accomplishes the task.
+    the lifetime of the memory buffer is appropriate.
 
     The return value is 0 on success, -1 on failure.
 
@@ -1060,7 +1062,7 @@ Converting data types
     *arr* is an array scalar (has 0 dimensions), it finds the data type
     of smallest size to which the value may be converted
     without overflow or truncation to an integer.
-    
+
     This function will not demote complex to float or anything to
     boolean, but will demote a signed integer to an unsigned integer
     when the scalar value is positive.
@@ -1086,7 +1088,7 @@ Converting data types
     Categories are determined by first checking which of boolean,
     integer (int/uint), or floating point (float/complex) the maximum
     kind of all the arrays and the scalars are.
-    
+
     If there are only scalars or the maximum category of the scalars
     is higher than the maximum category of the arrays,
     the data types are combined with :cfunc:`PyArray_PromoteTypes`
@@ -1308,11 +1310,21 @@ of the constant names is deprecated in 1.7.
     The data area is in Fortran-style contiguous order (first index varies
     the fastest).
 
-Notice that contiguous 1-d arrays are always both Fortran contiguous
-and C contiguous. Both of these flags can be checked and are convenience
-flags only as whether or not an array is :cdata:`NPY_ARRAY_C_CONTIGUOUS`
-or :cdata:`NPY_ARRAY_F_CONTIGUOUS` can be determined by the ``strides``,
-``dimensions``, and ``itemsize`` attributes.
+.. note::
+
+    Arrays can be both C-style and Fortran-style contiguous simultaneously.
+    This is clear for 1-dimensional arrays, but can also be true for higher
+    dimensional arrays.
+
+    Even for contiguous arrays a stride for a given dimension
+    ``arr.strides[dim]`` may be *arbitrary* if ``arr.shape[dim] == 1``
+    or the array has no elements.
+    It does *not* generally hold that ``self.strides[-1] == self.itemsize``
+    for C-style contiguous arrays or ``self.strides[0] == self.itemsize`` for
+    Fortran-style contiguous arrays is true. The correct way to access the
+    ``itemsize`` of an array from the C API is ``PyArray_ITEMSIZE(arr)``.
+
+    .. seealso:: :ref:`Internal memory layout of an ndarray <arrays.ndarray>`
 
 .. cvar:: NPY_ARRAY_OWNDATA
 
@@ -1320,7 +1332,7 @@ or :cdata:`NPY_ARRAY_F_CONTIGUOUS` can be determined by the ``strides``,
 
 .. cvar:: NPY_ARRAY_ALIGNED
 
-    The data area is aligned appropriately (for all strides).
+    The data area and all array elements are aligned appropriately.
 
 .. cvar:: NPY_ARRAY_WRITEABLE
 
@@ -1430,13 +1442,19 @@ For all of these macros *arr* must be an instance of a (subclass of)
     :cdata:`NPY_ARRAY_OWNDATA`, :cdata:`NPY_ARRAY_ALIGNED`,
     :cdata:`NPY_ARRAY_WRITEABLE`, :cdata:`NPY_ARRAY_UPDATEIFCOPY`.
 
-.. cfunction:: PyArray_ISCONTIGUOUS(arr)
+.. cfunction:: PyArray_IS_C_CONTIGUOUS(arr)
 
     Evaluates true if *arr* is C-style contiguous.
 
-.. cfunction:: PyArray_ISFORTRAN(arr)
+.. cfunction:: PyArray_IS_F_CONTIGUOUS(arr)
 
     Evaluates true if *arr* is Fortran-style contiguous.
+
+.. cfunction:: PyArray_ISFORTRAN(arr)
+
+    Evaluates true if *arr* is Fortran-style contiguous and *not*
+    C-style contiguous. :cfunc:`PyArray_IS_F_CONTIGUOUS`
+    is the correct way to test for Fortran-style contiguity.
 
 .. cfunction:: PyArray_ISWRITEABLE(arr)
 
@@ -1791,6 +1809,27 @@ Item selection and manipulation
     of bin numbers, giving the bin into which each item in *values*
     would be placed. No checking is done on whether or not self is in
     ascending order.
+
+.. cfunction:: int PyArray_Partition(PyArrayObject *self, PyArrayObject * ktharray, int axis, NPY_SELECTKIND which)
+
+    Equivalent to :meth:`ndarray.partition` (*self*, *ktharray*, *axis*,
+    *kind*). Partitions the array so that the values of the element indexed by
+    *ktharray* are in the positions they would be if the array is fully sorted
+    and places all elements smaller than the kth before and all elements equal
+    or greater after the kth element. The ordering of all elements within the
+    partitions is undefined.
+    If *self*->descr is a data-type with fields defined, then
+    self->descr->names is used to determine the sort order. A comparison where
+    the first field is equal will use the second field and so on. To alter the
+    sort order of a record array, create a new data-type with a different
+    order of names and construct a view of the array with that new data-type.
+    Returns zero on success and -1 on failure.
+
+.. cfunction:: PyObject* PyArray_ArgPartition(PyArrayObject *op, PyArrayObject * ktharray, int axis, NPY_SELECTKIND which)
+
+    Equivalent to :meth:`ndarray.argpartition` (*self*, *ktharray*, *axis*,
+    *kind*). Return an array of indices such that selection of these indices
+    along the given ``axis`` would return a partitioned version of *self*.
 
 .. cfunction:: PyObject* PyArray_Diagonal(PyArrayObject* self, int offset, int axis1, int axis2)
 

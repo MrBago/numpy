@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['add', 'filter2d']
 
 import numpy as N

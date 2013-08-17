@@ -8,6 +8,8 @@ extend over multiple lines, the closing three quotation marks must be on
 a line by itself, preferably preceeded by a blank line.
 
 """
+from __future__ import division, absolute_import, print_function
+
 import os # standard library imports first
 
 # Do NOT import using *, e.g. from numpy import *
@@ -55,14 +57,12 @@ def foo(var1, var2, long_var_name='hi') :
 
     Returns
     -------
+    type
+        Explanation of anonymous return value of type ``type``.
     describe : type
-        Explanation
-    output : type
-        Explanation
-    tuple : type
-        Explanation
-    items : type
-        even more explaining
+        Explanation of return value named `describe`.
+    out : type
+        Explanation of `out`.
 
     Other Parameters
     ----------------

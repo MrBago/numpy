@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import os
 import re
 
@@ -5,7 +7,7 @@ import waflib.Configure
 import waflib.Tools.c_config
 from waflib import Logs, Utils
 
-from common \
+from .common \
     import \
         LONG_DOUBLE_REPRESENTATION_SRC, pyod, \
         long_double_representation

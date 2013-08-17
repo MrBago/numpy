@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 # Code common to build tools
 import sys
 from os.path import join
@@ -29,7 +31,10 @@ C_ABI_VERSION = 0x01000009
 # without breaking binary compatibility.  In this case, only the C_API_VERSION
 # (*not* C_ABI_VERSION) would be increased.  Whenever binary compatibility is
 # broken, both C_API_VERSION and C_ABI_VERSION should be increased.
-C_API_VERSION = 0x00000008
+#
+# 0x00000008 - 1.7.x
+# 0x00000009 - 1.8.x
+C_API_VERSION = 0x00000009
 
 class MismatchCAPIWarning(Warning):
     pass
@@ -94,6 +99,30 @@ MANDATORY_FUNCS = ["sin", "cos", "tan", "sinh", "cosh", "tanh", "fabs",
 OPTIONAL_STDFUNCS = ["expm1", "log1p", "acosh", "asinh", "atanh",
         "rint", "trunc", "exp2", "log2", "hypot", "atan2", "pow",
         "copysign", "nextafter"]
+
+
+OPTIONAL_HEADERS = [
+# sse headers only enabled automatically on amd64/x32 builds
+                "xmmintrin.h", # SSE
+                "emmintrin.h", # SSE2
+]
+
+# optional gcc compiler builtins and their call arguments
+# call arguments are required as the compiler will do strict signature checking
+OPTIONAL_INTRINSICS = [("__builtin_isnan", '5.'),
+                       ("__builtin_isinf", '5.'),
+                       ("__builtin_isfinite", '5.'),
+                       ("__builtin_bswap32", '5u'),
+                       ("__builtin_bswap64", '5u'),
+                       ("__builtin_expect", '5, 0'),
+                       ]
+
+# gcc function attributes
+# (attribute as understood by gcc, function name),
+# function name will be converted to HAVE_<upper-case-name> preprocessor macro
+OPTIONAL_GCC_ATTRIBUTES = [('__attribute__((optimize("unroll-loops")))',
+                            'attribute_optimize_unroll_loops'),
+                          ]
 
 # Subset of OPTIONAL_STDFUNCS which may alreay have HAVE_* defined by Python.h
 OPTIONAL_STDFUNCS_MAYBE = ["expm1", "log1p", "acosh", "atanh", "asinh", "hypot",
@@ -161,13 +190,14 @@ def pyod(filename):
 
     Parameters
     ----------
-    filename: str
+    filename : str
         name of the file to get the dump from.
 
     Returns
     -------
-    out: seq
+    out : seq
         list of lines of od output
+
     Note
     ----
     We only implement enough to get the necessary information for long double
@@ -216,6 +246,8 @@ _INTEL_EXTENDED_12B = ['000', '000', '000', '000', '240', '242', '171', '353',
                        '031', '300', '000', '000']
 _INTEL_EXTENDED_16B = ['000', '000', '000', '000', '240', '242', '171', '353',
                        '031', '300', '000', '000', '000', '000', '000', '000']
+_MOTOROLA_EXTENDED_12B = ['300', '031', '000', '000', '353', '171',
+                          '242', '240', '000', '000', '000', '000']
 _IEEE_QUAD_PREC_BE = ['300', '031', '326', '363', '105', '100', '000', '000',
                       '000', '000', '000', '000', '000', '000', '000', '000']
 _IEEE_QUAD_PREC_LE = _IEEE_QUAD_PREC_BE[::-1]
@@ -249,6 +281,8 @@ def long_double_representation(lines):
                 if read[:12] == _BEFORE_SEQ[4:]:
                     if read[12:-8] == _INTEL_EXTENDED_12B:
                         return 'INTEL_EXTENDED_12_BYTES_LE'
+                    if read[12:-8] == _MOTOROLA_EXTENDED_12B:
+                        return 'MOTOROLA_EXTENDED_12_BYTES_BE'
                 elif read[:8] == _BEFORE_SEQ[8:]:
                     if read[8:-8] == _INTEL_EXTENDED_16B:
                         return 'INTEL_EXTENDED_16_BYTES_LE'

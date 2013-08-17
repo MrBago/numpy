@@ -108,7 +108,9 @@ terms of the NumPy (BSD style) license.  See LICENSE.txt that came with
 this distribution for specifics.
 
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
+
 """
+from __future__ import division, absolute_import, print_function
 
 import sys
 import os
@@ -116,6 +118,8 @@ import re
 import copy
 import warnings
 from glob import glob
+from functools import reduce
+
 if sys.version_info[0] < 3:
     from ConfigParser import NoOptionError, ConfigParser
 else:
@@ -134,8 +138,6 @@ from numpy.distutils.misc_util import is_sequence, is_string, \
 from numpy.distutils.command.config import config as cmd_config
 from numpy.distutils.compat import get_exception
 
-if sys.version_info[0] >= 3:
-    from functools import reduce
 
 # Determine number of bits
 import platform
@@ -216,25 +218,32 @@ else:
 
     import subprocess as sp
     try:
+        # Explicitly open/close file to avoid ResourceWarning when
+        # tests are run in debug mode Python 3.
+        tmp = open(os.devnull, 'w')
         p = sp.Popen(["gcc", "-print-multiarch"], stdout=sp.PIPE,
-                stderr=open(os.devnull, 'w'))
-    except OSError:
-        pass # gcc is not installed
+                stderr=tmp)
+    except (OSError, DistutilsError):
+        # OSError if gcc is not installed, or SandboxViolation (DistutilsError
+        # subclass) if an old setuptools bug is triggered (see gh-3160).
+        pass
     else:
         triplet = str(p.communicate()[0].decode().strip())
         if p.returncode == 0:
             # gcc supports the "-print-multiarch" option
             default_x11_lib_dirs += [os.path.join("/usr/lib/", triplet)]
             default_lib_dirs += [os.path.join("/usr/lib/", triplet)]
+    finally:
+        tmp.close()
 
 if os.path.join(sys.prefix, 'lib') not in default_lib_dirs:
     default_lib_dirs.insert(0, os.path.join(sys.prefix, 'lib'))
     default_include_dirs.append(os.path.join(sys.prefix, 'include'))
     default_src_dirs.append(os.path.join(sys.prefix, 'src'))
 
-default_lib_dirs = filter(os.path.isdir, default_lib_dirs)
-default_include_dirs = filter(os.path.isdir, default_include_dirs)
-default_src_dirs = filter(os.path.isdir, default_src_dirs)
+default_lib_dirs = [_m for _m in default_lib_dirs if os.path.isdir(_m)]
+default_include_dirs = [_m for _m in default_include_dirs if os.path.isdir(_m)]
+default_src_dirs = [_m for _m in default_src_dirs if os.path.isdir(_m)]
 
 so_ext = get_shared_lib_extension()
 
@@ -897,7 +906,7 @@ class mkl_info(system_info):
         paths = os.environ.get('LD_LIBRARY_PATH', '').split(os.pathsep)
         ld_so_conf = '/etc/ld.so.conf'
         if os.path.isfile(ld_so_conf):
-            for d in open(ld_so_conf, 'r').readlines():
+            for d in open(ld_so_conf, 'r'):
                 d = d.strip()
                 if d:
                     paths.append(d)
@@ -922,7 +931,7 @@ class mkl_info(system_info):
         if mklroot is None:
             system_info.__init__(self)
         else:
-            from cpuinfo import cpu
+            from .cpuinfo import cpu
             l = 'mkl'  # use shared library
             if cpu.is_Itanium():
                 plt = '64'
@@ -2132,7 +2141,7 @@ def show_all(argv=None):
         show_only.append(n)
     show_all = not show_only
     _gdict_ = globals().copy()
-    for name, c in _gdict_.iteritems():
+    for name, c in _gdict_.items():
         if not inspect.isclass(c):
             continue
         if not issubclass(c, system_info) or c is system_info:

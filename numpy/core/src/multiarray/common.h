@@ -1,5 +1,6 @@
 #ifndef _NPY_PRIVATE_COMMON_H_
 #define _NPY_PRIVATE_COMMON_H_
+#include <numpy/npy_common.h>
 
 #define error_converting(x)  (((x) == -1) && PyErr_Occurred())
 
@@ -24,6 +25,9 @@ PyArray_DTypeFromObject(PyObject *obj, int maxdims,
 NPY_NO_EXPORT int
 PyArray_DTypeFromObjectHelper(PyObject *obj, int maxdims,
                               PyArray_Descr **out_dtype, int string_status);
+
+NPY_NO_EXPORT PyObject *
+PyArray_GetAttrString_SuppressException(PyObject *v, char *name);
 
 /*
  * Returns NULL without setting an exception if no scalar is matched, a
@@ -61,6 +65,25 @@ NPY_NO_EXPORT void
 offset_bounds_from_strides(const int itemsize, const int nd,
                            const npy_intp *dims, const npy_intp *strides,
                            npy_intp *lower_offset, npy_intp *upper_offset);
+
+/*
+ * return true if pointer is aligned to 'alignment'
+ */
+static NPY_INLINE int
+npy_is_aligned(const void * p, const npy_uintp alignment)
+{
+    /*
+     * alignment is usually a power of two
+     * the test is faster than a direct modulo
+     */
+    if (NPY_LIKELY((alignment & (alignment - 1)) == 0)) {
+        return ((npy_uintp)(p) & ((alignment) - 1)) == 0;
+    }
+    else {
+        return ((npy_uintp)(p) % alignment) == 0;
+    }
+}
+
 
 #include "ucsnarrow.h"
 

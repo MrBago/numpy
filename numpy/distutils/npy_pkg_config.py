@@ -1,11 +1,14 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
+import re
+import os
+import shlex
+
 if sys.version_info[0] < 3:
     from ConfigParser import SafeConfigParser, NoOptionError
 else:
     from configparser import ConfigParser, SafeConfigParser, NoOptionError
-import re
-import os
-import shlex
 
 __all__ = ['FormatError', 'PkgNotFound', 'LibraryInfo', 'VariableSet',
         'read_config', 'parse_flags']
@@ -140,7 +143,7 @@ class LibraryInfo(object):
             The list of section headers.
 
         """
-        return self._sections.keys()
+        return list(self._sections.keys())
 
     def cflags(self, section="default"):
         val = self.vars.interpolate(self._sections[section]['cflags'])
@@ -219,7 +222,7 @@ class VariableSet(object):
             The names of all variables in the `VariableSet` instance.
 
         """
-        return self._raw_data.keys()
+        return list(self._raw_data.keys())
 
     # Emulate a dict to set/get variables values
     def __getitem__(self, name):
@@ -426,7 +429,7 @@ if __name__ == '__main__':
         files = glob.glob("*.ini")
         for f in files:
             info = read_config(f)
-            print ("%s\t%s - %s" % (info.name, info.name, info.description))
+            print("%s\t%s - %s" % (info.name, info.name, info.description))
 
     pkg_name = args[1]
     import os
@@ -452,10 +455,10 @@ if __name__ == '__main__':
         info.vars[name] = value
 
     if options.cflags:
-        print (info.cflags(section))
+        print(info.cflags(section))
     if options.libs:
-        print (info.libs(section))
+        print(info.libs(section))
     if options.version:
-        print (info.version)
+        print(info.version)
     if options.min_version:
-        print (info.version >= options.min_version)
+        print(info.version >= options.min_version)

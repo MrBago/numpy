@@ -34,17 +34,19 @@ Record arrays allow us to access fields as properties::
   array([ 2.,  2.])
 
 """
+from __future__ import division, absolute_import, print_function
+
+import sys
+import os
+
+from . import numeric as sb
+from .defchararray import chararray
+from . import numerictypes as nt
+from numpy.compat import isfileobj, bytes, long
+
 # All of the functions allow formats to be a dtype
 __all__ = ['record', 'recarray', 'format_parser']
 
-import numeric as sb
-from defchararray import chararray
-import numerictypes as nt
-import types
-import os
-import sys
-
-from numpy.compat import isfileobj, bytes
 
 ndarray = sb.ndarray
 
@@ -169,12 +171,12 @@ class format_parser:
         attribute """
 
         if (names):
-            if (type(names) in [types.ListType, types.TupleType]):
+            if (type(names) in [list, tuple]):
                 pass
-            elif (type(names) == str):
+            elif isinstance(names, str):
                 names = names.split(',')
             else:
-                raise NameError("illegal input names %s" % `names`)
+                raise NameError("illegal input names %s" % repr(names))
 
             self._names = [n.strip() for n in names[:self._nfields]]
         else:
@@ -436,7 +438,7 @@ class recarray(ndarray):
             fielddict = ndarray.__getattribute__(self, 'dtype').fields or {}
             if attr not in fielddict:
                 exctype, value = sys.exc_info()[:2]
-                raise exctype, value
+                raise exctype(value)
         else:
             fielddict = ndarray.__getattribute__(self, 'dtype').fields or {}
             if attr not in fielddict:
@@ -531,7 +533,7 @@ def fromarrays(arrayList, dtype=None, shape=None, formats=None,
                 raise ValueError("item in the array list must be an ndarray.")
             formats += _typestr[obj.dtype.type]
             if issubclass(obj.dtype.type, nt.flexible):
-                formats += `obj.itemsize`
+                formats += repr(obj.itemsize)
             formats += ','
         formats = formats[:-1]
 
@@ -593,15 +595,15 @@ def fromrecords(recList, dtype=None, shape=None, formats=None, names=None,
     >>> r.col2
     chararray(['dbe', 'de'],
           dtype='|S3')
-    >>> import cPickle
-    >>> print cPickle.loads(cPickle.dumps(r))
+    >>> import pickle
+    >>> print pickle.loads(pickle.dumps(r))
     [(456, 'dbe', 1.2) (2, 'de', 1.3)]
     """
 
     nfields = len(recList[0])
     if formats is None and dtype is None:  # slower
         obj = sb.array(recList, dtype=object)
-        arrlist = [sb.array(obj[..., i].tolist()) for i in xrange(nfields)]
+        arrlist = [sb.array(obj[..., i].tolist()) for i in range(nfields)]
         return fromarrays(arrlist, formats=formats, shape=shape, names=names,
                           titles=titles, aligned=aligned, byteorder=byteorder)
 
@@ -620,7 +622,7 @@ def fromrecords(recList, dtype=None, shape=None, formats=None, names=None,
         if len(shape) > 1:
             raise ValueError("Can only deal with 1-d array.")
         _array = recarray(shape, descr)
-        for k in xrange(_array.size):
+        for k in range(_array.size):
             _array[k] = tuple(recList[k])
         return _array
     else:

@@ -10,16 +10,20 @@ this distribution for specifics.
 
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 Pearu Peterson
+
 """
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['cpu']
 
 import sys, re, types
 import os
-if sys.version_info[0] < 3:
-    from commands import getstatusoutput
-else:
+
+if sys.version_info[0] >= 3:
     from subprocess import getstatusoutput
+else:
+    from commands import getstatusoutput
+
 import warnings
 import platform
 
@@ -78,7 +82,7 @@ class CPUInfoBase(object):
         if not name.startswith('_'):
             if hasattr(self,'_'+name):
                 attr = getattr(self,'_'+name)
-                if type(attr) is types.MethodType:
+                if isinstance(attr, types.MethodType):
                     return lambda func=self._try_call,attr=attr : func(attr)
             else:
                 return lambda : None
@@ -486,25 +490,29 @@ class Win32CPUInfo(CPUInfoBase):
         info = []
         try:
             #XXX: Bad style to use so long `try:...except:...`. Fix it!
-            import _winreg
+            if sys.version_info[0] >= 3:
+                import winreg
+            else:
+                import _winreg as winreg
+
             prgx = re.compile(r"family\s+(?P<FML>\d+)\s+model\s+(?P<MDL>\d+)"\
                               "\s+stepping\s+(?P<STP>\d+)",re.IGNORECASE)
-            chnd=_winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, self.pkey)
+            chnd=winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, self.pkey)
             pnum=0
-            while 1:
+            while True:
                 try:
-                    proc=_winreg.EnumKey(chnd,pnum)
-                except _winreg.error:
+                    proc=winreg.EnumKey(chnd,pnum)
+                except winreg.error:
                     break
                 else:
                     pnum+=1
                     info.append({"Processor":proc})
-                    phnd=_winreg.OpenKey(chnd,proc)
+                    phnd=winreg.OpenKey(chnd,proc)
                     pidx=0
                     while True:
                         try:
-                            name,value,vtpe=_winreg.EnumValue(phnd,pidx)
-                        except _winreg.error:
+                            name,value,vtpe=winreg.EnumValue(phnd,pidx)
+                        except winreg.error:
                             break
                         else:
                             pidx=pidx+1
@@ -516,7 +524,7 @@ class Win32CPUInfo(CPUInfoBase):
                                     info[-1]["Model"]=int(srch.group("MDL"))
                                     info[-1]["Stepping"]=int(srch.group("STP"))
         except:
-            print(sys.exc_value,'(ignoring)')
+            print(sys.exc_info()[1],'(ignoring)')
         self.__class__.info = info
 
     def _not_impl(self): pass

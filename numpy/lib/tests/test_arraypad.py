@@ -1,6 +1,7 @@
-'''
-Tests for the pad functions.
-'''
+"""Tests for the pad functions.
+
+"""
+from __future__ import division, absolute_import, print_function
 
 from numpy.testing import TestCase, run_module_suite, assert_array_equal
 from numpy.testing import assert_raises, assert_array_almost_equal
@@ -177,21 +178,21 @@ class TestStatistic(TestCase):
         a = [[4, 5, 6]]
         a = pad(a, (5, 7), 'mean', stat_length=2)
         b = np.array([
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
 
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
 
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5],
-                   [4, 4, 4, 4, 4,   4, 5, 6,   5, 5, 5, 5, 5, 5, 5]])
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6],
+                   [4, 4, 4, 4, 4,   4, 5, 6,   6, 6, 6, 6, 6, 6, 6]])
         assert_array_equal(a, b)
 
     def test_check_mean_2(self):
@@ -483,6 +484,14 @@ class TestEdge(TestCase):
                      [9,  9,  9,    9, 10, 11,   11, 11],
                      [9,  9,  9,    9, 10, 11,   11, 11]])
         assert_array_equal(a, b)
+
+
+class TestZeroPadWidth(TestCase):
+    def test_zero_pad_width(self):
+        arr = np.arange(30)
+        arr = np.reshape(arr, (6, 5))
+        for pad_width in (0, (0, 0), ((0, 0), (0, 0))):
+            assert_array_equal(arr, pad(arr, pad_width, mode='constant'))
 
 
 class ValueError1(TestCase):

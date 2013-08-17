@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['matrix', 'bmat', 'mat', 'asmatrix']
 
 import sys
@@ -17,7 +19,12 @@ if sys.version_info[0] >= 3:
                 return None
     _table = _NumCharTable()
     def _eval(astr):
-        return eval(astr.translate(_table))
+        str_ = astr.translate(_table)
+        if not str_:
+            raise TypeError("Invalid data string supplied: " + astr)
+        else:
+            return eval(str_)
+
 else:
     _table = [None]*256
     for k in range(256):
@@ -32,7 +39,11 @@ else:
     del k
 
     def _eval(astr):
-        return eval(astr.translate(_table,_todelete))
+        str_ = astr.translate(_table,_todelete)
+        if not str_:
+            raise TypeError("Invalid data string supplied: " + astr)
+        else:
+            return eval(str_)
 
 def _convert_from_string(data):
     rows = data.split(';')
@@ -43,7 +54,7 @@ def _convert_from_string(data):
         newrow = []
         for col in trow:
             temp = col.split()
-            newrow.extend(map(_eval,temp))
+            newrow.extend(map(_eval, temp))
         if count == 0:
             Ncols = len(newrow)
         elif len(newrow) != Ncols:
@@ -586,9 +597,9 @@ class matrix(N.ndarray):
 
         Parameters
         ----------
-        axis: int, optional
+        axis : int, optional
             Axis along which logical OR is performed
-        out: ndarray, optional
+        out : ndarray, optional
             Output to existing array instead of creating new one, must have
             same shape as expected output
 

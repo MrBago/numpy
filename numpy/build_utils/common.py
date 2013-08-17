@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
 import copy
 import binascii
@@ -25,13 +27,14 @@ def pyod(filename):
 
     Parameters
     ----------
-    filename: str
+    filename : str
         name of the file to get the dump from.
 
     Returns
     -------
-    out: seq
+    out : seq
         list of lines of od output
+
     Note
     ----
     We only implement enough to get the necessary information for long double

@@ -86,19 +86,17 @@ set_state            Set state of generator.
 ==================== =========================================================
 
 """
-# To get sub-modules
-from info import __doc__, __all__
+from __future__ import division, absolute_import, print_function
 
 import warnings
-from numpy.testing.utils import WarningManager
 
-warn_ctx = WarningManager()
-warn_ctx.__enter__()
-try:
+# To get sub-modules
+from .info import __doc__, __all__
+
+
+with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="numpy.ndarray size changed")
-    from mtrand import *
-finally:
-    warn_ctx.__exit__()
+    from .mtrand import *
 
 # Some aliases:
 ranf = random = sample = random_sample

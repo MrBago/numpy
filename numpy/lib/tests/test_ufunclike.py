@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 from numpy.testing import *
 import numpy.core as nx
 import numpy.lib.ufunclike as ufl

@@ -1,7 +1,8 @@
-#!/usr/bin/env python2.4
+#!/usr/bin/env python
+from __future__ import division, absolute_import, print_function
 
 import sys, os
-from cStringIO import StringIO
+from io import StringIO
 import re
 
 from Plex import *
@@ -31,7 +32,7 @@ def runScanner(data, scanner_class, lexicon=None):
         scanner = scanner_class(lexicon, info)
     else:
         scanner = scanner_class(info)
-    while 1:
+    while True:
         value, text = scanner.read()
         if value is None:
             break
@@ -251,7 +252,7 @@ def scrubSource(source, nsteps=None, verbose=False):
 
     for msg, step in steps:
         if verbose:
-            print msg
+            print(msg)
         source = step(source)
 
     return source

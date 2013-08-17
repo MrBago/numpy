@@ -1,13 +1,18 @@
-# Lifted from Precision.py.  This is for compatibility only.
-#
-#  The character strings are still for "new" NumPy
-#   which is the only Incompatibility with Numeric
+"""
+
+Lifted from Precision.py.  This is for compatibility only.
+
+The character strings are still for "new" NumPy
+which is the only Incompatibility with Numeric
+
+"""
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['Character', 'Complex', 'Float',
            'PrecisionError', 'PyObject', 'Int', 'UInt',
            'UnsignedInt', 'UnsignedInteger', 'string', 'typecodes', 'zeros']
 
-from functions import zeros
+from .functions import zeros
 import string   # for backwards compatibility
 
 typecodes = {'Character':'c', 'Integer':'bhil', 'UnsignedInteger':'BHIL', 'Float':'fd', 'Complex':'FD'}

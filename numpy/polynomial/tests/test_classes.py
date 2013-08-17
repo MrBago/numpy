@@ -3,7 +3,7 @@
 This tests the convert and cast methods of all the polynomial classes.
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from numpy.polynomial import (
@@ -145,7 +145,9 @@ def check_fromroots(Poly):
     assert_almost_equal(p1(r), 0)
 
     # check that polynomial is monic
-    p2 = Polynomial.cast(p1, domain=d, window=w)
+    pdom = Polynomial.domain
+    pwin = Polynomial.window
+    p2 = Polynomial.cast(p1, domain=pdom, window=pwin)
     assert_almost_equal(p2.coef[-1], 1)
 
 

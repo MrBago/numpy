@@ -1,9 +1,163 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
+import warnings
 
 import numpy as np
 from numpy.testing import *
-from numpy.testing.utils import WarningManager
-import warnings
+from numpy.compat import sixu
+
+# Switch between new behaviour when NPY_RELAXED_STRIDES_CHECKING is set.
+NPY_RELAXED_STRIDES_CHECKING = np.ones((10, 1), order='C').flags.f_contiguous
+
+
+def test_array_array():
+    obj = object()
+    tobj = type(object)
+    ones11 = np.ones((1, 1), np.float64)
+    tndarray = type(ones11)
+    # Test is_ndarary
+    assert_equal(np.array(ones11, dtype=np.float64), ones11)
+    old_refcount = sys.getrefcount(tndarray)
+    np.array(ones11)
+    assert_equal(old_refcount, sys.getrefcount(tndarray))
+
+    # test None
+    assert_equal(np.array(None, dtype=np.float64),
+                 np.array(np.nan, dtype=np.float64))
+    old_refcount = sys.getrefcount(tobj)
+    np.array(None, dtype=np.float64)
+    assert_equal(old_refcount, sys.getrefcount(tobj))
+
+    # test scalar
+    assert_equal(np.array(1.0, dtype=np.float64),
+                 np.ones((), dtype=np.float64))
+    old_refcount = sys.getrefcount(np.float64)
+    np.array(np.array(1.0, dtype=np.float64), dtype=np.float64)
+    assert_equal(old_refcount, sys.getrefcount(np.float64))
+
+    # test string
+    S2 = np.dtype((str, 2))
+    S3 = np.dtype((str, 3))
+    S5 = np.dtype((str, 5))
+    assert_equal(np.array("1.0", dtype=np.float64),
+                 np.ones((), dtype=np.float64))
+    assert_equal(np.array("1.0").dtype, S3)
+    assert_equal(np.array("1.0", dtype=str).dtype, S3)
+    assert_equal(np.array("1.0", dtype=S2), np.array("1."))
+    assert_equal(np.array("1", dtype=S5), np.ones((), dtype=S5))
+
+    # test unicode
+    _unicode = globals().get("unicode")
+    if _unicode:
+        U2 = np.dtype((_unicode, 2))
+        U3 = np.dtype((_unicode, 3))
+        U5 = np.dtype((_unicode, 5))
+        assert_equal(np.array(_unicode("1.0"), dtype=np.float64),
+                     np.ones((), dtype=np.float64))
+        assert_equal(np.array(_unicode("1.0")).dtype, U3)
+        assert_equal(np.array(_unicode("1.0"), dtype=_unicode).dtype, U3)
+        assert_equal(np.array(_unicode("1.0"), dtype=U2),
+                     np.array(_unicode("1.")))
+        assert_equal(np.array(_unicode("1"), dtype=U5),
+                     np.ones((), dtype=U5))
+
+    builtins = getattr(__builtins__, '__dict__', __builtins__)
+    assert_(isinstance(builtins, dict))
+
+    # test buffer
+    _buffer = builtins.get("buffer")
+    if _buffer and sys.version_info[:3] >= (2, 7, 5):
+        # This test fails for earlier versions of Python.
+        # Evidently a bug got fixed in 2.7.5.
+        dat = np.array(_buffer('1.0'), dtype=np.float64)
+        assert_equal(dat, [49.0, 46.0, 48.0])
+        assert_(dat.dtype.type is np.float64)
+
+        dat = np.array(_buffer(b'1.0'))
+        assert_equal(dat, [49, 46, 48])
+        assert_(dat.dtype.type is np.uint8)
+
+    # test memoryview, new version of buffer
+    _memoryview = builtins.get("memoryview")
+    if _memoryview:
+        dat = np.array(_memoryview(b'1.0'), dtype=np.float64)
+        assert_equal(dat, [49.0, 46.0, 48.0])
+        assert_(dat.dtype.type is np.float64)
+
+        dat = np.array(_memoryview(b'1.0'))
+        assert_equal(dat, [49, 46, 48])
+        assert_(dat.dtype.type is np.uint8)
+
+    # test array interface
+    a = np.array(100.0, dtype=np.float64)
+    o = type("o", (object,),
+             dict(__array_interface__=a.__array_interface__))
+    assert_equal(np.array(o, dtype=np.float64), a)
+
+    # test array_struct interface
+    a = np.array([(1, 4.0, 'Hello'), (2, 6.0, 'World')],
+                 dtype=[('f0', int), ('f1', float), ('f2', str)])
+    o = type("o", (object,),
+             dict(__array_struct__=a.__array_struct__))
+    ## wasn't what I expected... is np.array(o) supposed to equal a ?
+    ## instead we get a array([...], dtype=">V18")
+    assert_equal(str(np.array(o).data), str(a.data))
+
+    # test array
+    o = type("o", (object,),
+             dict(__array__=lambda *x: np.array(100.0, dtype=np.float64)))()
+    assert_equal(np.array(o, dtype=np.float64), np.array(100.0, np.float64))
+
+    # test recursion
+    nested = 1.5
+    for i in range(np.MAXDIMS):
+        nested = [nested]
+
+    # no error
+    np.array(nested)
+
+    # Exceeds recursion limit
+    assert_raises(ValueError, np.array, [nested], dtype=np.float64)
+
+    # Try with lists...
+    assert_equal(np.array([None] * 10, dtype=np.float64),
+                 np.empty((10,), dtype=np.float64) + np.nan)
+    assert_equal(np.array([[None]] * 10, dtype=np.float64),
+                 np.empty((10, 1), dtype=np.float64) + np.nan)
+    assert_equal(np.array([[None] * 10], dtype=np.float64),
+                 np.empty((1, 10), dtype=np.float64) + np.nan)
+    assert_equal(np.array([[None] * 10] * 10, dtype=np.float64),
+                 np.empty((10, 10), dtype=np.float64) + np.nan)
+
+    assert_equal(np.array([1.0] * 10, dtype=np.float64),
+                 np.ones((10,), dtype=np.float64))
+    assert_equal(np.array([[1.0]] * 10, dtype=np.float64),
+                 np.ones((10, 1), dtype=np.float64))
+    assert_equal(np.array([[1.0] * 10], dtype=np.float64),
+                 np.ones((1, 10), dtype=np.float64))
+    assert_equal(np.array([[1.0] * 10] * 10, dtype=np.float64),
+                 np.ones((10, 10), dtype=np.float64))
+
+    # Try with tuples
+    assert_equal(np.array((None,) * 10, dtype=np.float64),
+                 np.empty((10,), dtype=np.float64) + np.nan)
+    assert_equal(np.array([(None,)] * 10, dtype=np.float64),
+                 np.empty((10, 1), dtype=np.float64) + np.nan)
+    assert_equal(np.array([(None,) * 10], dtype=np.float64),
+                 np.empty((1, 10), dtype=np.float64) + np.nan)
+    assert_equal(np.array([(None,) * 10] * 10, dtype=np.float64),
+                 np.empty((10, 10), dtype=np.float64) + np.nan)
+
+    assert_equal(np.array((1.0,) * 10, dtype=np.float64),
+                 np.ones((10,), dtype=np.float64))
+    assert_equal(np.array([(1.0,)] * 10, dtype=np.float64),
+                 np.ones((10, 1), dtype=np.float64))
+    assert_equal(np.array([(1.0,) * 10], dtype=np.float64),
+                 np.ones((1, 10), dtype=np.float64))
+    assert_equal(np.array([(1.0,) * 10] * 10, dtype=np.float64),
+                 np.ones((10, 10), dtype=np.float64))
+
 
 def test_fastCopyAndTranspose():
     # 0D array
@@ -82,7 +236,44 @@ def test_array_astype():
     b = a.astype('f4', subok=False, copy=False)
     assert_equal(a, b)
     assert_(not (a is b))
-    assert_(type(b) != np.matrix)
+    assert_(type(b) is not np.matrix)
+
+    # Make sure converting from string object to fixed length string
+    # does not truncate.
+    a = np.array([b'a'*100], dtype='O')
+    b = a.astype('S')
+    assert_equal(a, b)
+    assert_equal(b.dtype, np.dtype('S100'))
+    a = np.array([sixu('a')*100], dtype='O')
+    b = a.astype('U')
+    assert_equal(a, b)
+    assert_equal(b.dtype, np.dtype('U100'))
+
+    # Same test as above but for strings shorter than 64 characters
+    a = np.array([b'a'*10], dtype='O')
+    b = a.astype('S')
+    assert_equal(a, b)
+    assert_equal(b.dtype, np.dtype('S10'))
+    a = np.array([sixu('a')*10], dtype='O')
+    b = a.astype('U')
+    assert_equal(a, b)
+    assert_equal(b.dtype, np.dtype('U10'))
+
+    a = np.array(123456789012345678901234567890, dtype='O').astype('S')
+    assert_array_equal(a, np.array(b'1234567890' * 3, dtype='S30'))
+    a = np.array(123456789012345678901234567890, dtype='O').astype('U')
+    assert_array_equal(a, np.array(sixu('1234567890' * 3), dtype='U30'))
+
+    a = np.array([123456789012345678901234567890], dtype='O').astype('S')
+    assert_array_equal(a, np.array(b'1234567890' * 3, dtype='S30'))
+    a = np.array([123456789012345678901234567890], dtype='O').astype('U')
+    assert_array_equal(a, np.array(sixu('1234567890' * 3), dtype='U30'))
+    
+    a = np.array(123456789012345678901234567890, dtype='S')
+    assert_array_equal(a, np.array(b'1234567890' * 3, dtype='S30'))
+    a = np.array(123456789012345678901234567890, dtype='U')
+    assert_array_equal(a, np.array(sixu('1234567890' * 3), dtype='U30'))
+
 
 def test_copyto_fromscalar():
     a = np.arange(6, dtype='f4').reshape(2,3)
@@ -147,10 +338,13 @@ def test_copy_order():
         assert_equal(x, y)
         assert_equal(res.flags.c_contiguous, ccontig)
         assert_equal(res.flags.f_contiguous, fcontig)
-        if strides:
-            assert_equal(x.strides, y.strides)
-        else:
-            assert_(x.strides != y.strides)
+        # This check is impossible only because
+        # NPY_RELAXED_STRIDES_CHECKING changes the strides actively
+        if not NPY_RELAXED_STRIDES_CHECKING:
+            if strides:
+                assert_equal(x.strides, y.strides)
+            else:
+                assert_(x.strides != y.strides)
 
     # Validate the initial state of a, b, and c
     assert_(a.flags.c_contiguous)
@@ -204,7 +398,8 @@ def test_copy_order():
 
 def test_contiguous_flags():
     a = np.ones((4,4,1))[::2,:,:]
-    a.strides = a.strides[:2] + (-123,)
+    if NPY_RELAXED_STRIDES_CHECKING:
+        a.strides = a.strides[:2] + (-123,)
     b = np.ones((2,2,1,2,2)).swapaxes(3,4)
 
     def check_contig(a, ccontig, fcontig):
@@ -214,8 +409,12 @@ def test_contiguous_flags():
     # Check if new arrays are correct:
     check_contig(a, False, False)
     check_contig(b, False, False)
-    check_contig(np.empty((2,2,0,2,2)), True, True)
-    check_contig(np.array([[[1],[2]]], order='F'), True, True)
+    if NPY_RELAXED_STRIDES_CHECKING:
+        check_contig(np.empty((2,2,0,2,2)), True, True)
+        check_contig(np.array([[[1],[2]]], order='F'), True, True)
+    else:
+        check_contig(np.empty((2,2,0,2,2)), True, False)
+        check_contig(np.array([[[1],[2]]], order='F'), False, True)
     check_contig(np.empty((2,2)), True, False)
     check_contig(np.empty((2,2), order='F'), False, True)
 
@@ -224,15 +423,30 @@ def test_contiguous_flags():
     check_contig(np.array(a, copy=False, order='C'), True, False)
     check_contig(np.array(a, ndmin=4, copy=False, order='F'), False, True)
 
-    # Check slicing update of flags and :
-    check_contig(a[0], True, True)
-    check_contig(a[None,::4,...,None], True, True)
-    check_contig(b[0,0,...], False, True)
-    check_contig(b[:,:,0:0,:,:], True, True)
+    if NPY_RELAXED_STRIDES_CHECKING:
+        # Check slicing update of flags and :
+        check_contig(a[0], True, True)
+        check_contig(a[None,::4,...,None], True, True)
+        check_contig(b[0,0,...], False, True)
+        check_contig(b[:,:,0:0,:,:], True, True)
+    else:
+        # Check slicing update of flags:
+        check_contig(a[0], True, False)
+        # Would be nice if this was C-Contiguous:
+        check_contig(a[None,0,...,None], False, False)
+        check_contig(b[0,0,0,...], False, True)
 
     # Test ravel and squeeze.
     check_contig(a.ravel(), True, True)
     check_contig(np.ones((1,3,1)).squeeze(), True, True)
+
+def test_broadcast_arrays():
+    # Test user defined dtypes
+    a = np.array([(1,2,3)], dtype='u4,u4,u4')
+    b = np.array([(1,2,3),(4,5,6),(7,8,9)], dtype='u4,u4,u4')
+    result = np.broadcast_arrays(a, b)
+    assert_equal(result[0], np.array([(1,2,3),(1,2,3),(1,2,3)], dtype='u4,u4,u4'))
+    assert_equal(result[1], np.array([(1,2,3),(4,5,6),(7,8,9)], dtype='u4,u4,u4'))
 
 if __name__ == "__main__":
     run_module_suite()

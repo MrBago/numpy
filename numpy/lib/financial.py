@@ -1,10 +1,15 @@
-# Some simple financial calculations
-#  patterned after spreadsheet computations.
+"""Some simple financial calculations
 
-# There is some complexity in each function
-#  so that the functions behave like ufuncs with
-#  broadcasting and being able to be called with scalars
-#  or arrays (or other sequences).
+patterned after spreadsheet computations.
+
+There is some complexity in each function
+so that the functions behave like ufuncs with
+broadcasting and being able to be called with scalars
+or arrays (or other sequences).
+
+"""
+from __future__ import division, absolute_import, print_function
+
 import numpy as np
 
 __all__ = ['fv', 'pmt', 'nper', 'ipmt', 'ppmt', 'pv', 'rate',
@@ -110,7 +115,7 @@ def fv(rate, nper, pmt, pv, when='end'):
 
     """
     when = _convert_when(when)
-    rate, nper, pmt, pv, when = map(np.asarray, [rate, nper, pmt, pv, when])
+    (rate, nper, pmt, pv, when) = map(np.asarray, [rate, nper, pmt, pv, when])
     temp = (1+rate)**nper
     miter = np.broadcast(rate, nper, pmt, pv, when)
     zer = np.zeros(miter.shape)
@@ -201,7 +206,7 @@ def pmt(rate, nper, pv, fv=0, when='end'):
 
     """
     when = _convert_when(when)
-    rate, nper, pv, fv, when = map(np.asarray, [rate, nper, pv, fv, when])
+    (rate, nper, pv, fv, when) = map(np.asarray, [rate, nper, pv, fv, when])
     temp = (1+rate)**nper
     miter = np.broadcast(rate, nper, pv, fv, when)
     zer = np.zeros(miter.shape)
@@ -258,17 +263,14 @@ def nper(rate, pmt, pv, fv=0, when='end'):
 
     """
     when = _convert_when(when)
-    rate, pmt, pv, fv, when = map(np.asarray, [rate, pmt, pv, fv, when])
+    (rate, pmt, pv, fv, when) = map(np.asarray, [rate, pmt, pv, fv, when])
 
     use_zero_rate = False
-    old_err = np.seterr(divide="raise")
-    try:
+    with np.errstate(divide="raise"):
         try:
             z = pmt*(1.0+rate*when)/rate
         except FloatingPointError:
             use_zero_rate = True
-    finally:
-        np.seterr(**old_err)
 
     if use_zero_rate:
         return (-fv + pv) / (pmt + 0.0)
@@ -497,7 +499,7 @@ def pv(rate, nper, pmt, fv=0.0, when='end'):
 
     """
     when = _convert_when(when)
-    rate, nper, pmt, fv, when = map(np.asarray, [rate, nper, pmt, fv, when])
+    (rate, nper, pmt, fv, when) = map(np.asarray, [rate, nper, pmt, fv, when])
     temp = (1+rate)**nper
     miter = np.broadcast(rate, nper, pmt, fv, when)
     zer = np.zeros(miter.shape)
@@ -563,7 +565,7 @@ def rate(nper, pmt, pv, fv, when='end', guess=0.10, tol=1e-6, maxiter=100):
 
     """
     when = _convert_when(when)
-    nper, pmt, pv, fv, when = map(np.asarray, [nper, pmt, pv, fv, when])
+    (nper, pmt, pv, fv, when) = map(np.asarray, [nper, pmt, pv, fv, when])
     rn = guess
     iter = 0
     close = False
@@ -670,7 +672,7 @@ def npv(rate, values):
     -----
     Returns the result of: [G]_
 
-    .. math :: \\sum_{t=0}^M{\\frac{values_t}{(1+rate)^{t}}}
+    .. math :: \\sum_{t=0}^{M-1}{\\frac{values_t}{(1+rate)^{t}}}
 
     References
     ----------
@@ -680,13 +682,13 @@ def npv(rate, values):
     Examples
     --------
     >>> np.npv(0.281,[-100, 39, 59, 55, 20])
-    -0.0066187288356340801
+    -0.0084785916384548798
 
     (Compare with the Example given for numpy.lib.financial.irr)
 
     """
     values = np.asarray(values)
-    return (values / (1+rate)**np.arange(1,len(values)+1)).sum(axis=0)
+    return (values / (1+rate)**np.arange(0,len(values))).sum(axis=0)
 
 def mirr(values, finance_rate, reinvest_rate):
     """
@@ -715,8 +717,8 @@ def mirr(values, finance_rate, reinvest_rate):
     neg = values < 0
     if not (pos.any() and neg.any()):
         return np.nan
-    numer = np.abs(npv(reinvest_rate, values*pos))*(1 + reinvest_rate)
-    denom = np.abs(npv(finance_rate, values*neg))*(1 + finance_rate)
+    numer = np.abs(npv(reinvest_rate, values*pos))
+    denom = np.abs(npv(finance_rate, values*neg))
     return (numer/denom)**(1.0/(n - 1))*(1 + reinvest_rate) - 1
 
 if __name__ == '__main__':

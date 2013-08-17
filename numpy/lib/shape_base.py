@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['column_stack','row_stack', 'dstack','array_split','split','hsplit',
            'vsplit','dsplit','apply_over_axes','expand_dims',
            'apply_along_axis', 'kron', 'tile', 'get_array_wrap']
@@ -53,14 +55,11 @@ def apply_along_axis(func1d,axis,arr,*args):
     For a function that doesn't return a scalar, the number of dimensions in
     `outarr` is the same as `arr`.
 
-    >>> def new_func(a):
-    ...     \"\"\"Divide elements of a by 2.\"\"\"
-    ...     return a * 0.5
-    >>> b = np.array([[1,2,3], [4,5,6], [7,8,9]])
-    >>> np.apply_along_axis(new_func, 0, b)
-    array([[ 0.5,  1. ,  1.5],
-           [ 2. ,  2.5,  3. ],
-           [ 3.5,  4. ,  4.5]])
+    >>> b = np.array([[8,1,7], [4,3,9], [5,2,6]])
+    >>> np.apply_along_axis(sorted, 1, b)
+    array([[1, 7, 8],
+           [3, 4, 9],
+           [2, 5, 6]])
 
     """
     arr = asarray(arr)
@@ -72,7 +71,7 @@ def apply_along_axis(func1d,axis,arr,*args):
             % (axis,nd))
     ind = [0]*(nd-1)
     i = zeros(nd,'O')
-    indlist = range(nd)
+    indlist = list(range(nd))
     indlist.remove(axis)
     i[axis] = slice(None,None)
     outshape = asarray(arr.shape).take(indlist)
@@ -343,7 +342,7 @@ def dstack(tup):
            [[3, 4]]])
 
     """
-    return _nx.concatenate(map(atleast_3d,tup),2)
+    return _nx.concatenate([atleast_3d(_m) for _m in tup], 2)
 
 def _replace_zero_by_x_arrays(sub_arys):
     for i in range(len(sub_arys)):
@@ -641,10 +640,9 @@ def get_array_prepare(*args):
 
     In case of ties, leftmost wins. If no wrapper is found, return None
     """
-    wrappers = [(getattr(x, '__array_priority__', 0), -i,
+    wrappers = sorted((getattr(x, '__array_priority__', 0), -i,
                  x.__array_prepare__) for i, x in enumerate(args)
-                                   if hasattr(x, '__array_prepare__')]
-    wrappers.sort()
+                                   if hasattr(x, '__array_prepare__'))
     if wrappers:
         return wrappers[-1][-1]
     return None
@@ -654,10 +652,9 @@ def get_array_wrap(*args):
 
     In case of ties, leftmost wins. If no wrapper is found, return None
     """
-    wrappers = [(getattr(x, '__array_priority__', 0), -i,
+    wrappers = sorted((getattr(x, '__array_priority__', 0), -i,
                  x.__array_wrap__) for i, x in enumerate(args)
-                                   if hasattr(x, '__array_wrap__')]
-    wrappers.sort()
+                                   if hasattr(x, '__array_wrap__'))
     if wrappers:
         return wrappers[-1][-1]
     return None
@@ -679,12 +676,10 @@ def kron(a,b):
 
     See Also
     --------
-
     outer : The outer product
 
     Notes
     -----
-
     The function assumes that the number of dimenensions of `a` and `b`
     are the same, if necessary prepending the smallest with ones.
     If `a.shape = (r0,r1,..,rN)` and `b.shape = (s0,s1,...,sN)`,
@@ -752,7 +747,7 @@ def kron(a,b):
             nd = nda
     result = outer(a,b).reshape(as_+bs)
     axis = nd-1
-    for _ in xrange(nd):
+    for _ in range(nd):
         result = concatenate(result, axis=axis)
     wrapper = get_array_prepare(a, b)
     if wrapper is not None:
@@ -835,5 +830,5 @@ def tile(A, reps):
         dim_in = shape[i]
         dim_out = dim_in*nrep
         shape[i] = dim_out
-        n /= max(dim_in,1)
+        n //= max(dim_in, 1)
     return c.reshape(shape)

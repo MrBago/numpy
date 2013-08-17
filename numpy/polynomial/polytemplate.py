@@ -9,19 +9,16 @@ creating additional specific polynomial classes (e.g., Legendre, Jacobi,
 etc.) in the future, such that all these classes will have a common API.
 
 """
+from __future__ import division, absolute_import, print_function
+
 import string
 import sys
 
-if sys.version_info[0] >= 3:
-    rel_import = "from . import"
-else:
-    rel_import = "import"
-
 polytemplate = string.Template('''
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 import numpy as np
 import warnings
-REL_IMPORT polyutils as pu
+from . import polyutils as pu
 
 class $name(pu.PolyBase) :
     """A $name series class.
@@ -809,6 +806,13 @@ class $name(pu.PolyBase) :
         ----------
         roots : array_like
             List of roots.
+        domain : {array_like, None}, optional
+            Domain for the resulting instance of $name. If none the domain
+            is the interval from the smallest root to the largest. The
+            default is $domain.
+        window : array_like, optional
+            Window for the resulting instance of $name. The default value
+            is $domain.
 
         Returns
         -------
@@ -820,10 +824,13 @@ class $name(pu.PolyBase) :
         ${nick}fromroots : equivalent function
 
         """
+        [roots] = pu.as_series([roots], trim=False)
         if domain is None :
             domain = pu.getdomain(roots)
-        rnew = pu.mapdomain(roots, domain, window)
-        coef = ${nick}fromroots(rnew)
+        deg = len(roots)
+        off, scl = pu.mapparms(domain, window)
+        rnew = off + scl*roots
+        coef = ${nick}fromroots(rnew) / scl**deg
         return $name(coef, domain=domain, window=window)
 
     @staticmethod
@@ -916,4 +923,4 @@ class $name(pu.PolyBase) :
         """
         return series.convert(domain, $name, window)
 
-'''.replace('REL_IMPORT', rel_import))
+''')

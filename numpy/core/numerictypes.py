@@ -80,6 +80,7 @@ Exported symbols include:
      \\-> object_ (not used much)                (kind=O)
 
 """
+from __future__ import division, absolute_import, print_function
 
 # we add more at the bottom
 __all__ = ['sctypeDict', 'sctypeNA', 'typeDict', 'typeNA', 'sctypes',
@@ -89,29 +90,30 @@ __all__ = ['sctypeDict', 'sctypeNA', 'typeDict', 'typeNA', 'sctypes',
            'busday_offset', 'busday_count', 'is_busday', 'busdaycalendar',
            ]
 
-from numpy.core.multiarray import typeinfo, ndarray, array, \
-                      empty, dtype, datetime_data, datetime_as_string, \
-                      busday_offset, busday_count, is_busday, busdaycalendar
+from numpy.core.multiarray import (
+        typeinfo, ndarray, array, empty, dtype, datetime_data,
+        datetime_as_string, busday_offset, busday_count, is_busday,
+        busdaycalendar
+        )
 import types as _types
 import sys
+from numpy.compat import bytes, long
 
 # we don't export these for import *, but we do want them accessible
 # as numerictypes.bool, etc.
-from __builtin__ import bool, int, long, float, complex, object, unicode, str
-from numpy.compat import bytes
-
 if sys.version_info[0] >= 3:
-    # Py3K
-    class long(int):
-        # Placeholder class -- this will not escape outside numerictypes.py
-        pass
+    from builtins import bool, int, float, complex, object, str
+    unicode = str
+else:
+    from __builtin__ import bool, int, float, complex, object, unicode, str
+
 
 # String-handling utilities to avoid locale-dependence.
 
 # "import string" is costly to import!
 # Construct the translation tables directly
 #   "A" = chr(65), "a" = chr(97)
-_all_chars = map(chr, range(256))
+_all_chars = [chr(_m) for _m in range(256)]
 _ascii_upper = _all_chars[65:65+26]
 _ascii_lower = _all_chars[97:97+26]
 LOWER_TABLE="".join(_all_chars[:65] + _ascii_lower + _all_chars[65+26:])
@@ -783,7 +785,7 @@ _alignment = _typedict()
 _maxvals = _typedict()
 _minvals = _typedict()
 def _construct_lookups():
-    for name, val in typeinfo.iteritems():
+    for name, val in typeinfo.items():
         if not isinstance(val, tuple):
             continue
         obj = val[-1]
@@ -856,7 +858,7 @@ try:
                    _types.StringType, _types.UnicodeType, _types.BufferType]
 except AttributeError:
     # Py3K
-    ScalarType = [int, float, complex, long, bool, bytes, str, memoryview]
+    ScalarType = [int, float, complex, int, bool, bytes, str, memoryview]
 
 ScalarType.extend(_sctype2char_dict.keys())
 ScalarType = tuple(ScalarType)

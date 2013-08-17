@@ -1,3 +1,5 @@
+from __future__ import division, print_function
+
 import os
 import re
 import struct
@@ -94,12 +96,11 @@ class Ufunc(object):
 
     Attributes
     ----------
-
-    nin: number of input arguments
-    nout: number of output arguments
-    identity: identity element for a two-argument function
-    docstring: docstring for the ufunc
-    type_descriptions: list of TypeDescription objects
+    nin : number of input arguments
+    nout : number of output arguments
+    identity : identity element for a two-argument function
+    docstring : docstring for the ufunc
+    type_descriptions : list of TypeDescription objects
     """
     def __init__(self, nin, nout, identity, docstring, typereso,
                  *type_descriptions):
@@ -206,6 +207,7 @@ cmplx = 'FDG'
 cmplxO = cmplx + O
 cmplxP = cmplx + P
 inexact = flts + cmplx
+inexactvec = 'fd'
 noint = inexact+O
 nointP = inexact+P
 allP = bints+times+flts+cmplxP
@@ -685,6 +687,7 @@ defdict = {
     Ufunc(1, 1, None,
           docstrings.get('numpy.core.umath.sqrt'),
           None,
+          TD(inexactvec),
           TD(inexact, f='sqrt', astype={'e':'f'}),
           TD(P, f='sqrt'),
           ),
@@ -835,8 +838,7 @@ def make_arrays(funcdict):
     #
     code1list = []
     code2list = []
-    names = list(funcdict.keys())
-    names.sort()
+    names = sorted(funcdict.keys())
     for name in names:
         uf = funcdict[name]
         funclist = []
@@ -901,8 +903,7 @@ def make_arrays(funcdict):
 
 def make_ufuncs(funcdict):
     code3list = []
-    names = list(funcdict.keys())
-    names.sort()
+    names = sorted(funcdict.keys())
     for name in names:
         uf = funcdict[name]
         mlist = []

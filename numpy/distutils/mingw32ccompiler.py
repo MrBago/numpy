@@ -7,9 +7,9 @@ Support code for building Python extensions on Windows.
     # 3. Force windows to use g77
 
 """
+from __future__ import division, absolute_import, print_function
 
 import os
-import subprocess
 import sys
 import subprocess
 import re
@@ -18,7 +18,7 @@ import re
 import numpy.distutils.ccompiler
 
 if sys.version_info[0] < 3:
-    import log
+    from . import log
 else:
     from numpy.distutils import log
 # NT stuff
@@ -199,10 +199,7 @@ class Mingw32CCompiler(distutils.cygwinccompiler.CygwinCCompiler):
             func = distutils.cygwinccompiler.CygwinCCompiler.link
         else:
             func = UnixCCompiler.link
-        if sys.version_info[0] >= 3:
-            func(*args[:func.__code__.co_argcount])
-        else:
-            func(*args[:func.im_func.__code__.co_argcount])
+        func(*args[:func.__code__.co_argcount])
         return
 
     def object_filenames (self,
@@ -243,7 +240,7 @@ class Mingw32CCompiler(distutils.cygwinccompiler.CygwinCCompiler):
 def find_python_dll():
     maj, min, micro = [int(i) for i in sys.version_info[:3]]
     dllname = 'python%d%d.dll' % (maj, min)
-    print ("Looking for %s" % dllname)
+    print("Looking for %s" % dllname)
 
     # We can't do much here:
     # - find it in python main dir
@@ -515,10 +512,13 @@ def manifest_rc(name, type='dll'):
     'exe').
 
     Parameters
-    ---------- name: str
+    ----------
+    name : str
             name of the manifest file to embed
-        type: str ('dll', 'exe')
-            type of the binary which will embed the manifest"""
+    type : str {'dll', 'exe'}
+            type of the binary which will embed the manifest
+
+    """
     if type == 'dll':
         rctype = 2
     elif type == 'exe':

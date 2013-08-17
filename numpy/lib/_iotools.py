@@ -1,12 +1,21 @@
-"""A collection of functions designed to help I/O with ascii files."""
+"""A collection of functions designed to help I/O with ascii files.
+
+"""
+from __future__ import division, absolute_import, print_function
+
 __docformat__ = "restructuredtext en"
 
 import sys
 import numpy as np
 import numpy.core.numeric as nx
-from __builtin__ import bool, int, long, float, complex, object, unicode, str
+from numpy.compat import asbytes, bytes, asbytes_nested, long, basestring
 
-from numpy.compat import asbytes, bytes, asbytes_nested
+if sys.version_info[0] >= 3:
+    from builtins import bool, int, float, complex, object,  str
+    unicode = str
+else:
+    from __builtin__ import bool, int, float, complex, object, unicode, str
+
 
 if sys.version_info[0] >= 3:
     def _bytes_to_complex(s):
@@ -83,7 +92,8 @@ def has_nested_fields(ndtype):
 
     Raises
     ------
-    AttributeError : If `ndtype` does not have a `names` attribute.
+    AttributeError
+        If `ndtype` does not have a `names` attribute.
 
     Examples
     --------
@@ -263,7 +273,7 @@ class NameValidator(object):
         * If 'lower', field names are converted to lower case.
 
         The default value is True.
-    replace_space: '_', optional
+    replace_space : '_', optional
         Character(s) used in replacement of white spaces.
 
     Notes
@@ -712,7 +722,8 @@ class StringConverter(object):
             value = (value,)
         _strict_call = self._strict_call
         try:
-            map(_strict_call, value)
+            for _m in value:
+                _strict_call(_m)
         except ValueError:
             # Raise an exception if we locked the converter...
             if self._locked:
@@ -845,7 +856,7 @@ def easy_dtype(ndtype, names=None, defaultfmt="f%i", **validationargs):
             if nbtypes == 0:
                 formats = tuple([ndtype.type] * len(names))
                 names = validate(names, defaultfmt=defaultfmt)
-                ndtype = np.dtype(zip(names, formats))
+                ndtype = np.dtype(list(zip(names, formats)))
             # Structured dtype: just validate the names as needed
             else:
                 ndtype.names = validate(names, nbfields=nbtypes,

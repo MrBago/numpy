@@ -11,23 +11,23 @@ terms of the NumPy License.
 NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Date: 2005/07/20 11:27:58 $
 Pearu Peterson
+
 """
-
-__version__ = "$Revision: 1.53 $"[10:-1]
-
-import __version__
-f2py_version = __version__.version
-
+from __future__ import division, absolute_import, print_function
 
 import pprint
 import sys
-import types
+
+from . import __version__
+from .auxfuncs import *
+from . import cfuncs
+
+f2py_version = __version__.version
+
 errmess=sys.stderr.write
 outmess=sys.stdout.write
 show=pprint.pprint
 
-from auxfuncs import *
-import cfuncs
 
 ################## Rules for callback function ##############
 
@@ -414,7 +414,7 @@ def buildcallbacks(m):
 
 def buildcallback(rout,um):
     global cb_map
-    import capi_maps
+    from . import capi_maps
 
     outmess('\tConstructing call-back function "cb_%s_in_%s"\n'%(rout['name'],um))
     args,depargs=getargs(rout)
@@ -466,7 +466,7 @@ def buildcallback(rout,um):
                 if '_break' in r:
                     break
     if 'args' in rd and 'optargs' in rd:
-        if type(rd['optargs'])==type([]):
+        if isinstance(rd['optargs'], list):
             rd['optargs']=rd['optargs']+["""
 #ifndef F2PY_CB_RETURNCOMPLEX
 ,
@@ -482,7 +482,7 @@ def buildcallback(rout,um):
 ,
 #endif
 """]
-    if type(rd['docreturn'])==types.ListType:
+    if isinstance(rd['docreturn'], list):
         rd['docreturn']=stripcomma(replace('#docreturn#',{'docreturn':rd['docreturn']}))
     optargs=stripcomma(replace('#docsignopt#',
                                 {'docsignopt':rd['docsignopt']}
@@ -499,10 +499,10 @@ def buildcallback(rout,um):
     rd['docstrsigns']=[]
     rd['latexdocstrsigns']=[]
     for k in ['docstrreq','docstropt','docstrout','docstrcbs']:
-        if k in rd and type(rd[k])==types.ListType:
+        if k in rd and isinstance(rd[k], list):
             rd['docstrsigns']=rd['docstrsigns']+rd[k]
         k='latex'+k
-        if k in rd and type(rd[k])==types.ListType:
+        if k in rd and isinstance(rd[k], list):
             rd['latexdocstrsigns']=rd['latexdocstrsigns']+rd[k][0:1]+\
                                     ['\\begin{description}']+rd[k][1:]+\
                                     ['\\end{description}']
@@ -515,7 +515,7 @@ def buildcallback(rout,um):
 
     ar=applyrules(cb_routine_rules,rd)
     cfuncs.callbacks[rd['name']]=ar['body']
-    if type(ar['need'])==str:
+    if isinstance(ar['need'], str):
         ar['need']=[ar['need']]
 
     if 'need' in rd:

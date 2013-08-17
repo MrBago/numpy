@@ -225,14 +225,30 @@ The sections of the docstring are:
 
 5. **Returns**
 
-   Explanation of the returned values and their types, of the same
-   format as **parameters**.
+   Explanation of the returned values and their types. Similar to the
+   **parameters** section, except the name of each return value is optional.
+   The type of each return value is always required::
+
+     Returns
+     -------
+     int
+         Description of anonymous integer return value.
+
+   If both the name and type are specified, the **returns** section takes the
+   same form as the **parameters** section::
+
+     Returns
+     -------
+     err_code : int
+         Non-zero value indicates error code, or zero on success.
+     err_msg : str or None
+         Human readable error message, or None on success.
 
 6. **Other parameters**
 
    An optional section used to describe infrequently used parameters.
    It should only be used if a function has a large number of keyword
-   prameters, to prevent cluttering the **parameters** section.
+   parameters, to prevent cluttering the **parameters** section.
 
 7. **Raises**
 
@@ -544,20 +560,18 @@ Other points to keep in mind
 ----------------------------
 * Equations : as discussed in the **Notes** section above, LaTeX formatting 
   should be kept to a minimum.  Often it's possible to show equations as 
-  Python code or pseudo-code instead, which is much better readable in a 
+  Python code or pseudo-code instead, which is much more readable in a 
   terminal.  For inline display use double backticks (like ``y = np.sin(x)``). 
   For display with blank lines above and below, use a double colon and indent 
   the code, like::
 
     end of previous sentence::
 
-      y = np.sin(x)
+        y = np.sin(x)
 
 * Notes and Warnings : If there are points in the docstring that deserve
   special emphasis, the reST directives for a note or warning can be used
-  in the vicinity of the context of the warning (inside a section). Syntax:
-
-  ::
+  in the vicinity of the context of the warning (inside a section). Syntax::
 
     .. warning:: Warning text.
 
@@ -601,7 +615,7 @@ Conclusion
 `An example <http://github.com/numpy/numpy/blob/master/doc/example.py>`_ of the
 format shown here is available.  Refer to `How to Build API/Reference
 Documentation
-<http://github.com/numpy/numpy/blob/master/doc/HOWTO_BUILD_DOCS.txt>`_
+<http://github.com/numpy/numpy/blob/master/doc/HOWTO_BUILD_DOCS.rst.txt>`_
 on how to use Sphinx_ to build the manual.
 
 This document itself was written in ReStructuredText, and may be converted to

@@ -1,9 +1,11 @@
+from __future__ import division, absolute_import, print_function
+
 from scipy import weave
 from numpy import rand, zeros_like
 
 def example1(a):
     if not isinstance(a, list):
-        raise ValueError, "argument must be a list"
+        raise ValueError("argument must be a list")
     code = r"""
            int i;
            py::tuple results(2);
@@ -18,7 +20,7 @@ def example1(a):
 
 def arr(a):
     if a.ndim != 2:
-        raise ValueError, "a must be 2-d"
+        raise ValueError("a must be 2-d")
     code = r"""
     int i,j;
     for(i=1;i<Na[0]-1;i++) {
@@ -38,8 +40,8 @@ def arr(a):
     return b
 
 a = [None]*10
-print example1(a)
-print a
+print(example1(a))
+print(a)
 
 a = rand(512,512)
 b = arr(a)

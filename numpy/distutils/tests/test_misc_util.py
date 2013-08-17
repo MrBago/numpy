@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+from __future__ import division, absolute_import, print_function
 
 from numpy.testing import *
-from numpy.distutils.misc_util import appendpath, minrelpath, gpaths, rel_path
+from numpy.distutils.misc_util import appendpath, minrelpath, \
+    gpaths, get_shared_lib_extension
 from os.path import join, sep, dirname
 
 ajoin = lambda *paths: join(*((sep,)+paths))
@@ -49,10 +51,25 @@ class TestGpaths(TestCase):
     def test_gpaths(self):
         local_path = minrelpath(join(dirname(__file__),'..'))
         ls = gpaths('command/*.py', local_path)
-        assert_(join(local_path,'command','build_src.py') in ls,`ls`)
+        assert_(join(local_path,'command','build_src.py') in ls,repr(ls))
         f = gpaths('system_info.py', local_path)
-        assert_(join(local_path,'system_info.py')==f[0],`f`)
+        assert_(join(local_path,'system_info.py')==f[0],repr(f))
 
+class TestSharedExtension(TestCase):
+
+    def test_get_shared_lib_extension(self):
+        import sys
+        ext = get_shared_lib_extension(is_python_ext=False)
+        if sys.platform.startswith('linux'):
+            assert_equal(ext, '.so')
+        elif sys.platform.startswith('gnukfreebsd'):
+            assert_equal(ext, '.so')
+        elif sys.platform.startswith('darwin'):
+            assert_equal(ext, '.dylib')
+        elif sys.platform.startswith('win'):
+            assert_equal(ext, '.dll')
+        # just check for no crash
+        assert_(get_shared_lib_extension(is_python_ext=True))
 
 if __name__ == "__main__":
     run_module_suite()

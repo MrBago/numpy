@@ -483,7 +483,8 @@ PyUFunc_ReduceWrapper(PyArrayObject *operand, PyArrayObject *out,
         if (op_view == NULL) {
             goto fail;
         }
-        if (PyArray_SIZE(op_view) == 0) {
+        /* empty op_view signals no reduction; but 0-d arrays cannot be empty */
+        if ((PyArray_SIZE(op_view) == 0) || (PyArray_NDIM(operand) == 0)) {
             Py_DECREF(op_view);
             op_view = NULL;
             goto finish;
@@ -513,7 +514,7 @@ PyUFunc_ReduceWrapper(PyArrayObject *operand, PyArrayObject *out,
                                NPY_KEEPORDER, casting,
                                op_flags,
                                op_dtypes,
-                               0, NULL, NULL, buffersize);
+                               -1, NULL, NULL, buffersize);
     if (iter == NULL) {
         goto fail;
     }

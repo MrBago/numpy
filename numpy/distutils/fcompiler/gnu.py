@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import re
 import os
 import sys
@@ -39,7 +41,7 @@ class GnuFCompiler(FCompiler):
         m = re.match(r'GNU Fortran\s+95.*?([0-9-.]+)', version_string)
         if m:
             return ('gfortran', m.group(1))
-        m = re.match(r'GNU Fortran.*?([0-9-.]+)', version_string)
+        m = re.match(r'GNU Fortran.*?\-?([0-9-.]+)', version_string)
         if m:
             v = m.group(1)
             if v.startswith('0') or v.startswith('2') or v.startswith('3'):
@@ -370,10 +372,11 @@ def _can_target(cmd, arch):
 if __name__ == '__main__':
     from distutils import log
     log.set_verbosity(2)
+
     compiler = GnuFCompiler()
     compiler.customize()
     print(compiler.get_version())
-    raw_input('Press ENTER to continue...')
+
     try:
         compiler = Gnu95FCompiler()
         compiler.customize()
@@ -381,4 +384,3 @@ if __name__ == '__main__':
     except Exception:
         msg = get_exception()
         print(msg)
-    raw_input('Press ENTER to continue...')

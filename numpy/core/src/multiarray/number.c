@@ -209,6 +209,26 @@ PyArray_GenericBinaryFunction(PyArrayObject *m1, PyObject *m2, PyObject *op)
         Py_INCREF(Py_NotImplemented);
         return Py_NotImplemented;
     }
+
+    if (!PyArray_Check(m2)) {
+          /*
+           * Catch priority inversion and punt, but only if it's guaranteed
+           * that we were called through m1 and the other guy is not an array
+           * at all. Note that some arrays need to pass through here even
+           * with priorities inverted, for example: float(17) * np.matrix(...)
+           *
+           * See also:
+           * - https://github.com/numpy/numpy/issues/3502
+           * - https://github.com/numpy/numpy/issues/3503
+           */
+          double m1_prio = PyArray_GetPriority(m1, NPY_SCALAR_PRIORITY);
+          double m2_prio = PyArray_GetPriority(m2, NPY_SCALAR_PRIORITY);
+          if (m1_prio < m2_prio) {
+              Py_INCREF(Py_NotImplemented);
+              return Py_NotImplemented;
+          }
+    }
+
     return PyObject_CallFunction(op, "OO", m1, m2);
 }
 
@@ -320,7 +340,6 @@ is_scalar_with_conversion(PyObject *o2, double* out_exponent)
             }
         }
     }
-#if (PY_VERSION_HEX >= 0x02050000)
     if (PyIndex_Check(o2)) {
         PyObject* value = PyNumber_Index(o2);
         Py_ssize_t val;
@@ -338,7 +357,6 @@ is_scalar_with_conversion(PyObject *o2, double* out_exponent)
         *out_exponent = (double) val;
         return NPY_INTPOS_SCALAR;
     }
-#endif
     return NPY_NOSCALAR;
 }
 
@@ -831,7 +849,6 @@ _array_copy_nice(PyArrayObject *self)
     return PyArray_Return((PyArrayObject *) PyArray_Copy(self));
 }
 
-#if PY_VERSION_HEX >= 0x02050000
 static PyObject *
 array_index(PyArrayObject *v)
 {
@@ -840,9 +857,14 @@ array_index(PyArrayObject *v)
                         "one element can be converted to an index");
         return NULL;
     }
+    if (PyArray_NDIM(v) != 0) {
+        if (DEPRECATE("converting an array with ndim > 0 to an index"
+                      " will result in an error in the future") < 0) {
+            return NULL;
+        }
+    }
     return PyArray_DESCR(v)->f->getitem(PyArray_DATA(v), v);
 }
-#endif
 
 
 NPY_NO_EXPORT PyNumberMethods array_as_number = {
@@ -902,9 +924,5 @@ NPY_NO_EXPORT PyNumberMethods array_as_number = {
     (binaryfunc)array_true_divide,              /*nb_true_divide*/
     (binaryfunc)array_inplace_floor_divide,     /*nb_inplace_floor_divide*/
     (binaryfunc)array_inplace_true_divide,      /*nb_inplace_true_divide*/
-
-#if PY_VERSION_HEX >= 0x02050000
     (unaryfunc)array_index,                     /* nb_index */
-#endif
-
 };

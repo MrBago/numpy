@@ -1,18 +1,25 @@
+from __future__ import division, print_function
+
 import imp
 import os
 import sys
 import shutil
+import pickle
+import copy
+import warnings
+import re
 from os.path import join
 from numpy.distutils import log
 from distutils.dep_util import newer
 from distutils.sysconfig import get_config_var
-import warnings
-import re
 
 from setup_common import *
 
 # Set to True to enable multiple file compilations (experimental)
 ENABLE_SEPARATE_COMPILATION = (os.environ.get('NPY_SEPARATE_COMPILATION', "1") != "0")
+# Set to True to enable relaxed strides checking. This (mostly) means
+# that `strides[dim]` is ignored if `shape[dim] == 1` when setting flags.
+NPY_RELAXED_STRIDES_CHECKING = (os.environ.get('NPY_RELAXED_STRIDES_CHECKING', "0") != "0")
 
 # XXX: ugly, we use a class to avoid calling twice some expensive functions in
 # config.h/numpyconfig.h. I don't see a better way because distutils force
@@ -20,11 +27,9 @@ ENABLE_SEPARATE_COMPILATION = (os.environ.get('NPY_SEPARATE_COMPILATION', "1") !
 # configuration informations between extensions is not easy.
 # Using a pickled-based memoize does not work because config_cmd is an instance
 # method, which cPickle does not like.
-try:
-    import cPickle as _pik
-except ImportError:
-    import pickle as _pik
-import copy
+#
+# Use pickle in all cases, as cPickle is gone in python3 and the difference
+# in time is only in build. -- Charles Harris, 2013-03-30
 
 class CallOnceOnly(object):
     def __init__(self):
@@ -35,25 +40,25 @@ class CallOnceOnly(object):
     def check_types(self, *a, **kw):
         if self._check_types is None:
             out = check_types(*a, **kw)
-            self._check_types = _pik.dumps(out)
+            self._check_types = pickle.dumps(out)
         else:
-            out = copy.deepcopy(_pik.loads(self._check_types))
+            out = copy.deepcopy(pickle.loads(self._check_types))
         return out
 
     def check_ieee_macros(self, *a, **kw):
         if self._check_ieee_macros is None:
             out = check_ieee_macros(*a, **kw)
-            self._check_ieee_macros = _pik.dumps(out)
+            self._check_ieee_macros = pickle.dumps(out)
         else:
-            out = copy.deepcopy(_pik.loads(self._check_ieee_macros))
+            out = copy.deepcopy(pickle.loads(self._check_ieee_macros))
         return out
 
     def check_complex(self, *a, **kw):
         if self._check_complex is None:
             out = check_complex(*a, **kw)
-            self._check_complex = _pik.dumps(out)
+            self._check_complex = pickle.dumps(out)
         else:
-            out = copy.deepcopy(_pik.loads(self._check_complex))
+            out = copy.deepcopy(pickle.loads(self._check_complex))
         return out
 
 PYTHON_HAS_UNICODE_WIDE = True
@@ -100,7 +105,7 @@ def win32_checks(deflist):
     a = get_build_architecture()
 
     # Distutils hack on AMD64 on windows
-    print('BUILD_ARCHITECTURE: %r, os.name=%r, sys.platform=%r' % \
+    print('BUILD_ARCHITECTURE: %r, os.name=%r, sys.platform=%r' %
           (a, os.name, sys.platform))
     if a == 'AMD64':
         deflist.append('DISTUTILS_USE_SDK')
@@ -149,13 +154,26 @@ def check_math_capabilities(config, moredefs, mathlibs):
     # config.h in the public namespace, so we have a clash for the common
     # functions we test. We remove every function tested by python's
     # autoconf, hoping their own test are correct
-    if sys.version_info[:2] >= (2, 5):
-        for f in OPTIONAL_STDFUNCS_MAYBE:
-            if config.check_decl(fname2def(f),
-                        headers=["Python.h", "math.h"]):
-                OPTIONAL_STDFUNCS.remove(f)
+    for f in OPTIONAL_STDFUNCS_MAYBE:
+        if config.check_decl(fname2def(f),
+                    headers=["Python.h", "math.h"]):
+            OPTIONAL_STDFUNCS.remove(f)
 
     check_funcs(OPTIONAL_STDFUNCS)
+
+    for h in OPTIONAL_HEADERS:
+        if config.check_func("", decl=False, call=False, headers=[h]):
+            moredefs.append((fname2def(h).replace(".", "_"), 1))
+
+    for f, args in OPTIONAL_INTRINSICS:
+        if config.check_func(f, decl=False, call=True, call_args=args):
+            moredefs.append((fname2def(f), 1))
+
+    for dec, fn in OPTIONAL_GCC_ATTRIBUTES:
+        if config.check_funcs_once([fn],
+                                   decl=dict((('%s %s' % (dec, fn), True),)),
+                                   call=False):
+            moredefs.append((fname2def(fn), 1))
 
     # C99 functions: float and long double versions
     check_funcs(C99_FUNCS_SINGLE)
@@ -217,19 +235,16 @@ def check_ieee_macros(config):
     # functions we test. We remove every function tested by python's
     # autoconf, hoping their own test are correct
     _macros = ["isnan", "isinf", "signbit", "isfinite"]
-    if sys.version_info[:2] >= (2, 6):
-        for f in _macros:
-            py_symbol = fname2def("decl_%s" % f)
-            already_declared = config.check_decl(py_symbol,
-                    headers=["Python.h", "math.h"])
-            if already_declared:
-                if config.check_macro_true(py_symbol,
-                        headers=["Python.h", "math.h"]):
-                    pub.append('NPY_%s' % fname2def("decl_%s" % f))
-            else:
-                macros.append(f)
-    else:
-        macros = _macros[:]
+    for f in _macros:
+        py_symbol = fname2def("decl_%s" % f)
+        already_declared = config.check_decl(py_symbol,
+                headers=["Python.h", "math.h"])
+        if already_declared:
+            if config.check_macro_true(py_symbol,
+                    headers=["Python.h", "math.h"]):
+                pub.append('NPY_%s' % fname2def("decl_%s" % f))
+        else:
+            macros.append(f)
     # Normally, isnan and isinf are macro (C99), but some platforms only have
     # func, or both func and macro version. Check for macro only, and define
     # replacement ones if not found.
@@ -433,11 +448,15 @@ def configuration(parent_package='',top_path=None):
             if ENABLE_SEPARATE_COMPILATION:
                 moredefs.append(('ENABLE_SEPARATE_COMPILATION', 1))
 
+            if NPY_RELAXED_STRIDES_CHECKING:
+                moredefs.append(('NPY_RELAXED_STRIDES_CHECKING', 1))
+
             # Get long double representation
             if sys.platform != 'darwin':
                 rep = check_long_double_representation(config_cmd)
                 if rep in ['INTEL_EXTENDED_12_BYTES_LE',
                            'INTEL_EXTENDED_16_BYTES_LE',
+                           'MOTOROLA_EXTENDED_12_BYTES_BE',
                            'IEEE_QUAD_LE', 'IEEE_QUAD_BE',
                            'IEEE_DOUBLE_LE', 'IEEE_DOUBLE_BE',
                            'DOUBLE_DOUBLE_BE']:
@@ -482,7 +501,7 @@ def configuration(parent_package='',top_path=None):
         else:
             mathlibs = []
             target_f = open(target)
-            for line in target_f.readlines():
+            for line in target_f:
                 s = '#define MATHLIB'
                 if line.startswith(s):
                     value = line[len(s):].strip()
@@ -529,6 +548,9 @@ def configuration(parent_package='',top_path=None):
 
             if ENABLE_SEPARATE_COMPILATION:
                 moredefs.append(('NPY_ENABLE_SEPARATE_COMPILATION', 1))
+
+            if NPY_RELAXED_STRIDES_CHECKING:
+                moredefs.append(('NPY_RELAXED_STRIDES_CHECKING', 1))
 
             # Check wether we can use inttypes (C99) formats
             if config_cmd.check_decl('PRIdPTR', headers = ['inttypes.h']):
@@ -594,6 +616,8 @@ def configuration(parent_package='',top_path=None):
     config.add_include_dirs(join('src', 'multiarray'))
     config.add_include_dirs(join('src', 'umath'))
     config.add_include_dirs(join('src', 'npysort'))
+
+    config.add_define_macros([("HAVE_NPY_CONFIG_H", "1")])
 
     config.numpy_include_dirs.extend(config.paths('include'))
 
@@ -669,7 +693,8 @@ def configuration(parent_package='',top_path=None):
     config.add_library('npysort',
             sources = [join('src', 'npysort', 'quicksort.c.src'),
                        join('src', 'npysort', 'mergesort.c.src'),
-                       join('src', 'npysort', 'heapsort.c.src')])
+                       join('src', 'npysort', 'heapsort.c.src'),
+                       join('src', 'npysort', 'selection.c.src')])
 
 
     #######################################################################
@@ -742,7 +767,7 @@ def configuration(parent_package='',top_path=None):
             join('include', 'numpy', 'npy_cpu.h'),
             join('include', 'numpy', 'numpyconfig.h'),
             join('include', 'numpy', 'ndarraytypes.h'),
-            join('include', 'numpy', 'npy_deprecated_api.h'),
+            join('include', 'numpy', 'npy_1_7_deprecated_api.h'),
             join('include', 'numpy', '_numpyconfig.h.in'),
             ]
 
@@ -819,7 +844,9 @@ def configuration(parent_package='',top_path=None):
         subpath = join('src', 'umath')
         # NOTE: For manual template conversion of loops.h.src, read the note
         #       in that file.
-        sources = [join(local_dir, subpath, 'loops.c.src')]
+        sources = [
+            join(local_dir, subpath, 'loops.c.src'),
+            join(local_dir, subpath, 'simd.inc.src')]
 
         # numpy.distutils generate .c from .c.src in weird directories, we have
         # to add them there as they depend on the build_dir
@@ -846,12 +873,14 @@ def configuration(parent_package='',top_path=None):
             join('src', 'umath', 'umathmodule.c'),
             join('src', 'umath', 'reduction.c'),
             join('src', 'umath', 'funcs.inc.src'),
+            join('src', 'umath', 'simd.inc.src'),
             join('src', 'umath', 'loops.c.src'),
             join('src', 'umath', 'ufunc_object.c'),
             join('src', 'umath', 'ufunc_type_resolution.c')]
 
     umath_deps = [
             generate_umath_py,
+            join('src', 'umath', 'simd.inc.src'),
             join(codegen_dir,'generate_ufunc_api.py')]
 
     if not ENABLE_SEPARATE_COMPILATION:
@@ -859,6 +888,7 @@ def configuration(parent_package='',top_path=None):
         umath_src = [join('src', 'umath', 'umathmodule_onefile.c')]
         umath_src.append(generate_umath_templated_sources)
         umath_src.append(join('src', 'umath', 'funcs.inc.src'))
+        umath_src.append(join('src', 'umath', 'simd.inc.src'))
 
     config.add_extension('umath',
                          sources = umath_src +
@@ -915,11 +945,32 @@ def configuration(parent_package='',top_path=None):
                     sources = [join('src','umath', 'umath_tests.c.src')])
 
     #######################################################################
+    #                   custom rational dtype module                      #
+    #######################################################################
+
+    config.add_extension('test_rational',
+                    sources = [join('src','umath', 'test_rational.c.src')])
+
+    #######################################################################
+    #                        struct_ufunc_test module                     #
+    #######################################################################
+
+    config.add_extension('struct_ufunc_test',
+                    sources = [join('src','umath', 'struct_ufunc_test.c.src')])
+
+    #######################################################################
     #                     multiarray_tests module                         #
     #######################################################################
 
     config.add_extension('multiarray_tests',
                     sources = [join('src', 'multiarray', 'multiarray_tests.c.src')])
+
+    #######################################################################
+    #                        operand_flag_tests module                    #
+    #######################################################################
+
+    config.add_extension('operand_flag_tests',
+                    sources = [join('src','umath', 'operand_flag_tests.c.src')])
 
     config.add_data_dir('tests')
     config.add_data_dir('tests/data')

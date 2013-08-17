@@ -14,7 +14,9 @@ NO WARRANTY IS EXPRESSED OR IMPLIED.  USE AT YOUR OWN RISK.
 $Revision: 1.32 $
 $Date: 2005/01/30 17:22:14 $
 Pearu Peterson
+
 """
+from __future__ import division, print_function
 
 __version__ = "$Id: setup.py,v 1.32 2005/01/30 17:22:14 pearu Exp $"
 
@@ -51,7 +53,7 @@ def configuration(parent_package='',top_path=None):
             log.info('Creating %s', target)
             f = open(target,'w')
             f.write('''\
-#!/usr/bin/env %s
+#!%s
 # See http://cens.ioc.ee/projects/f2py2e/
 import os, sys
 for mode in ["g3-numpy", "2e-numeric", "2e-numarray", "2e-numpy"]:
@@ -75,7 +77,7 @@ else:
     sys.stderr.write("Unknown mode: " + repr(mode) + "\\n")
     sys.exit(1)
 main()
-'''%(os.path.basename(sys.executable)))
+'''%(sys.executable))
             f.close()
         return target
 

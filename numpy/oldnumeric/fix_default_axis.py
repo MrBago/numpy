@@ -32,7 +32,10 @@ cumprod
 prod
 std
 mean
+
 """
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['convertfile', 'convertall', 'converttree']
 
 import sys
@@ -182,7 +185,7 @@ def _import_change(fstr, names):
     ind = 0
     importstr = "from numpy import"
     N = len(importstr)
-    while 1:
+    while True:
         ind = fstr.find(importstr, ind)
         if (ind < 0):
             break
@@ -258,7 +261,7 @@ def convertfile(filename, import_change=False):
     filestr = getfile(filename)
     newstr, total = add_axis(filestr, import_change)
     if total > 0:
-        print "Changing ", filename
+        print("Changing ", filename)
         copyfile(filename, filestr)
         makenewfile(filename, newstr)
         sys.stdout.flush()

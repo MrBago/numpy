@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import division, absolute_import, print_function
 
 # System imports
 from   distutils.util import get_platform
@@ -68,7 +69,7 @@ class Array1TestCase(unittest.TestCase):
         "Test Array1 resize method, array"
         a = np.zeros((2*self.length,), dtype='l')
         self.array1.resize(a)
-        self.failUnless(len(self.array1) == len(a))
+        self.failUnless(len(self.array1) == a.size)
 
     def testResizeBad(self):
         "Test Array1 resize method, negative length"
@@ -176,11 +177,11 @@ class Array2TestCase(unittest.TestCase):
         self.array2.resize(newRows, newCols)
         self.failUnless(len(self.array2) == newRows * newCols)
 
-    #def testResize1(self):
-    #    "Test Array2 resize method, array"
-    #    a = np.zeros((2*self.nrows, 2*self.ncols), dtype='l')
-    #    self.array2.resize(a)
-    #    self.failUnless(len(self.array2) == len(a))
+    def testResize1(self):
+        "Test Array2 resize method, array"
+        a = np.zeros((2*self.nrows, 2*self.ncols), dtype='l')
+        self.array2.resize(a)
+        self.failUnless(len(self.array2) == a.size)
 
     def testResizeBad1(self):
         "Test Array2 resize method, negative nrows"
@@ -276,8 +277,8 @@ if __name__ == "__main__":
     suite.addTest(unittest.makeSuite(Array2TestCase))
 
     # Execute the test suite
-    print "Testing Classes of Module Array"
-    print "NumPy version", np.__version__
-    print
+    print("Testing Classes of Module Array")
+    print("NumPy version", np.__version__)
+    print()
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     sys.exit(len(result.errors) + len(result.failures))

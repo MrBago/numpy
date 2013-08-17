@@ -1,5 +1,6 @@
 """ Build swig, f2py, pyrex sources.
 """
+from __future__ import division, absolute_import, print_function
 
 import os
 import re
@@ -36,7 +37,7 @@ def subst_vars(target, source, d):
     try:
         ft = open(target, 'w')
         try:
-            for l in fs.readlines():
+            for l in fs:
                 m = var.search(l)
                 if m:
                     ft.write(l.replace('@%s@' % m.group(1), d[m.group(1)]))
@@ -186,8 +187,8 @@ class build_src(build_ext.build_ext):
                     build_dir = self.get_package_dir('.'.join(d.split(os.sep)))
                 else:
                     build_dir = os.path.join(self.build_src,d)
-                funcs = filter(lambda f:hasattr(f, '__call__'), files)
-                files = filter(lambda f:not hasattr(f, '__call__'), files)
+                funcs = [f for f in files if hasattr(f, '__call__')]
+                files = [f for f in files if not hasattr(f, '__call__')]
                 for f in funcs:
                     if f.__code__.co_argcount==1:
                         s = f(build_dir)
@@ -766,9 +767,8 @@ def get_swig_target(source):
 
 def get_swig_modulename(source):
     f = open(source,'r')
-    f_readlines = getattr(f,'xreadlines',f.readlines)
     name = None
-    for line in f_readlines():
+    for line in f:
         m = _swig_module_name_match(line)
         if m:
             name = m.group('name')
@@ -793,8 +793,7 @@ _f2py_user_module_name_match = re.compile(r'\s*python\s*module\s*(?P<name>[\w_]*
 def get_f2py_modulename(source):
     name = None
     f = open(source)
-    f_readlines = getattr(f,'xreadlines',f.readlines)
-    for line in f_readlines():
+    for line in f:
         m = _f2py_module_name_match(line)
         if m:
             if _f2py_user_module_name_match(line): # skip *__user__* names

@@ -30,12 +30,14 @@ The underlying code for these functions is an f2c-translated and modified
 version of the FFTPACK routines.
 
 """
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['fft','ifft', 'rfft', 'irfft', 'hfft', 'ihfft', 'rfftn',
            'irfftn', 'rfft2', 'irfft2', 'fft2', 'ifft2', 'fftn', 'ifftn']
 
 from numpy.core import asarray, zeros, swapaxes, shape, conjugate, \
      take
-import fftpack_lite as fftpack
+from . import fftpack_lite as fftpack
 
 _fft_cache = {}
 _real_fft_cache = {}
@@ -509,7 +511,7 @@ def _cook_nd_args(a, s=None, axes=None, invreal=0):
         shapeless = 0
     s = list(s)
     if axes is None:
-        axes = range(-len(s), 0)
+        axes = list(range(-len(s), 0))
     if len(s) != len(axes):
         raise ValueError("Shape and axes have different lengths.")
     if invreal and shapeless:
@@ -520,7 +522,7 @@ def _cook_nd_args(a, s=None, axes=None, invreal=0):
 def _raw_fftnd(a, s=None, axes=None, function=fft):
     a = asarray(a)
     s, axes = _cook_nd_args(a, s, axes)
-    itl = range(len(axes))
+    itl = list(range(len(axes)))
     itl.reverse()
     for ii in itl:
         a = function(a, n=s[ii], axis=axes[ii])

@@ -13,12 +13,11 @@ function name, setup and teardown functions and so on - see
 ``nose.tools`` for more information.
 
 """
-import warnings
-import sys
+from __future__ import division, absolute_import, print_function
 
-from numpy.testing.utils import \
-        WarningManager, WarningMessage
+import warnings
 import collections
+
 
 def slow(t):
     """
@@ -133,9 +132,9 @@ def skipif(skip_condition, msg=None):
             if msg is None:
                 out = 'Test skipped due to test condition'
             else:
-                out = '\n'+msg
+                out = msg
 
-            return "Skipping test: %s%s" % (func.__name__,out)
+            return "Skipping test: %s: %s" % (func.__name__, out)
 
         # We need to define *two* skippers because Python doesn't allow both
         # return with value and yield inside the same function.
@@ -208,7 +207,7 @@ def knownfailureif(fail_condition, msg=None):
         # Local import to avoid a hard nose dependency and only incur the
         # import time overhead at actual test-time.
         import nose
-        from noseclasses import KnownFailureTest
+        from .noseclasses import KnownFailureTest
         def knownfailer(*args, **kwargs):
             if fail_val():
                 raise KnownFailureTest(msg)
@@ -247,14 +246,12 @@ def deprecated(conditional=True):
         # Local import to avoid a hard nose dependency and only incur the
         # import time overhead at actual test-time.
         import nose
-        from noseclasses import KnownFailureTest
+        from .noseclasses import KnownFailureTest
 
         def _deprecated_imp(*args, **kwargs):
             # Poor man's replacement for the with statement
-            ctx = WarningManager(record=True)
-            l = ctx.__enter__()
-            warnings.simplefilter('always')
-            try:
+            with warnings.catch_warnings(record=True) as l:
+                warnings.simplefilter('always')
                 f(*args, **kwargs)
                 if not len(l) > 0:
                     raise AssertionError("No warning raised when calling %s"
@@ -262,8 +259,6 @@ def deprecated(conditional=True):
                 if not l[0].category is DeprecationWarning:
                     raise AssertionError("First warning for %s is not a " \
                             "DeprecationWarning( is %s)" % (f.__name__, l[0]))
-            finally:
-                ctx.__exit__()
 
         if isinstance(conditional, collections.Callable):
             cond = conditional()

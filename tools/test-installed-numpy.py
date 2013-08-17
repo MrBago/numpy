@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division, absolute_import, print_function
 
 # A simple script to test the installed version of numpy by calling
 # 'numpy.test()'. Key features:
@@ -11,7 +12,7 @@
 # But, python2.4's -m switch only works with top-level modules, not modules
 # that are inside packages. So, once we drop 2.4 support, maybe...
 
-import sys
+import sys, os
 # In case we are run from the source directory, we don't want to import numpy
 # from there, we want to import the installed version:
 sys.path.pop(0)
@@ -34,6 +35,17 @@ parser.add_option("-m", "--mode",
 (options, args) = parser.parse_args()
 
 import numpy
+
+# Check that NPY_RELAXED_STRIDES_CHECKING is active when set.
+# The same flags check is also used in the tests to switch behavior.
+if (os.environ.get('NPY_RELAXED_STRIDES_CHECKING', "0") != "0"):
+    if not numpy.ones((10,1), order='C').flags.f_contiguous:
+        print('NPY_RELAXED_STRIDES_CHECKING set, but not active.')
+        sys.exit(1)
+elif numpy.ones((10,1), order='C').flags.f_contiguous:
+    print('NPY_RELAXED_STRIDES_CHECKING not set, but active.')
+    sys.exit(1)
+
 result = numpy.test(options.mode,
                     verbose=options.verbose,
                     extra_argv=args,

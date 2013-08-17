@@ -1,5 +1,8 @@
+from __future__ import division, absolute_import, print_function
+
 import sys
 from numpy.testing import *
+from numpy.testing.utils import gen_alignment_data
 import numpy as np
 
 types = [np.bool_, np.byte, np.ubyte, np.short, np.ushort, np.intc, np.uintc,
@@ -42,9 +45,40 @@ class TestTypes(TestCase):
             assert_equal(a,b)
 
 
+class TestBaseMath(TestCase):
+    def test_blocked(self):
+        #test alignments offsets for simd instructions
+        for dt in [np.float32, np.float64]:
+            for out, inp1, inp2, msg in gen_alignment_data(dtype=dt,
+                                                           type='binary',
+                                                           max_size=12):
+                exp1 = np.ones_like(inp1)
+                inp1[...] = np.ones_like(inp1)
+                inp2[...] = np.zeros_like(inp2)
+                assert_almost_equal(np.add(inp1, inp2), exp1, err_msg=msg)
+                assert_almost_equal(np.add(inp1, 1), exp1 + 1, err_msg=msg)
+                assert_almost_equal(np.add(1, inp2), exp1, err_msg=msg)
+
+                np.add(inp1, inp2, out=out)
+                assert_almost_equal(out, exp1, err_msg=msg)
+
+                inp2[...] += np.arange(inp2.size, dtype=dt) + 1
+                assert_almost_equal(np.square(inp2),
+                                    np.multiply(inp2, inp2),  err_msg=msg)
+                assert_almost_equal(np.reciprocal(inp2),
+                                    np.divide(1, inp2),  err_msg=msg)
+
+                inp1[...] = np.ones_like(inp1)
+                inp2[...] = np.zeros_like(inp2)
+                np.add(inp1, 1, out=out)
+                assert_almost_equal(out, exp1 + 1, err_msg=msg)
+                np.add(1, inp2, out=out)
+                assert_almost_equal(out, exp1, err_msg=msg)
+
+
 class TestPower(TestCase):
     def test_small_types(self):
-        for t in [np.int8, np.int16]:
+        for t in [np.int8, np.int16, np.float16]:
             a = t(3)
             b = a ** 4
             assert_(b == 81, "error with %r: got %r" % (t,b))
@@ -58,12 +92,25 @@ class TestPower(TestCase):
                 assert_(b == 6765201, msg)
             else:
                 assert_almost_equal(b, 6765201, err_msg=msg)
-
+    def test_mixed_types(self):
+        typelist = [np.int8,np.int16,np.float16,
+                    np.float32,np.float64,np.int8,
+                    np.int16,np.int32,np.int64]
+        for t1 in typelist:
+            for t2 in typelist:
+                a = t1(3)
+                b = t2(2)
+                result = a**b
+                msg = ("error with %r and %r:"
+                       "got %r, expected %r") % (t1, t2, result, 9)
+                if np.issubdtype(np.dtype(result), np.integer):
+                    assert_(result == 9, msg)
+                else:
+                    assert_almost_equal(result, 9, err_msg=msg)
 
 class TestComplexDivision(TestCase):
     def test_zero_division(self):
-        err = np.seterr(all="ignore")
-        try:
+        with np.errstate(all="ignore"):
             for t in [np.complex64, np.complex128]:
                 a = t(0.0)
                 b = t(1.0)
@@ -78,8 +125,6 @@ class TestComplexDivision(TestCase):
                 assert_(np.isnan(b/a))
                 b = t(0.)
                 assert_(np.isnan(b/a))
-        finally:
-            np.seterr(**err)
 
 
 class TestConversion(TestCase):
@@ -88,10 +133,10 @@ class TestConversion(TestCase):
         li = [10**6, 10**12, 10**18, -10**6, -10**12, -10**18]
         for T in [None, np.float64, np.int64]:
             a = np.array(l,dtype=T)
-            assert_equal(map(int,a), li)
+            assert_equal([int(_m) for _m in a], li)
 
         a = np.array(l[:3], dtype=np.uint64)
-        assert_equal(map(int,a), li[:3])
+        assert_equal([int(_m) for _m in a], li[:3])
 
 
 #class TestRepr(TestCase):

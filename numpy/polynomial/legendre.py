@@ -81,13 +81,13 @@ numpy.polynomial.hermite
 numpy.polynomial.hermite_e
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 import numpy.linalg as la
-import polyutils as pu
+from . import polyutils as pu
 import warnings
-from polytemplate import polytemplate
+from .polytemplate import polytemplate
 
 __all__ = ['legzero', 'legone', 'legx', 'legdomain', 'legline',
     'legadd', 'legsub', 'legmulx', 'legmul', 'legdiv', 'legpow', 'legval',
@@ -191,7 +191,7 @@ def leg2poly(c) :
 
 
     """
-    from polynomial import polyadd, polysub, polymulx
+    from .polynomial import polyadd, polysub, polymulx
 
     [c] = pu.as_series([c])
     n = len(c)
@@ -1238,7 +1238,7 @@ def legvander(x, deg) :
 
     Returns
     -------
-    vander: ndarray
+    vander : ndarray
         The pseudo-Vandermonde matrix. The shape of the returned matrix is
         ``x.shape + (deg + 1,)``, where The last index is the degree of the
         corresponding Legendre polynomial.  The dtype will be the same as
@@ -1596,7 +1596,7 @@ def legcompanion(c):
     if len(c) < 2:
         raise ValueError('Series must have maximum degree of at least 1.')
     if len(c) == 2:
-        return np.array(-c[0]/c[1])
+        return np.array([[-c[0]/c[1]]])
 
     n = len(c) - 1
     mat = np.zeros((n, n), dtype=c.dtype)

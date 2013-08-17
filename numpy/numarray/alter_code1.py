@@ -52,6 +52,8 @@ Makes the following changes:
    - .setimaginary() --> .imag
 
 """
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['convertfile', 'convertall', 'converttree', 'convertsrc']
 
 import sys
@@ -79,7 +81,7 @@ def changeimports(fstr, name, newname):
     ind = 0
     Nlen = len(fromstr)
     Nlen2 = len("from %s import " % newname)
-    while 1:
+    while True:
         found = fstr.find(fromstr,ind)
         if (found < 0):
             break

@@ -3,7 +3,10 @@
 :author: Pierre Gerard-Marchant
 :contact: pierregm_at_uga_dot_edu
 :version: $Id: testutils.py 3529 2007-11-13 08:01:14Z jarrod.millman $
+
 """
+from __future__ import division, absolute_import, print_function
+
 __author__ = "Pierre GF Gerard-Marchant ($Author: jarrod.millman $)"
 __version__ = "1.0"
 __revision__ = "$Revision: 3529 $"
@@ -18,7 +21,7 @@ import numpy.core.umath as umath
 from numpy.testing import *
 import numpy.testing.utils as utils
 
-from core import mask_or, getmask, masked_array, nomask, masked, filled, \
+from .core import mask_or, getmask, masked_array, nomask, masked, filled, \
                  equal, less
 
 #------------------------------------------------------------------------------

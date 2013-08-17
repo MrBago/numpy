@@ -20,6 +20,25 @@ Released for unlimited redistribution.
 
 """
 # pylint: disable-msg=E1002
+from __future__ import division, absolute_import, print_function
+
+import sys
+import warnings
+from functools import reduce
+
+import numpy as np
+import numpy.core.umath as umath
+import numpy.core.numerictypes as ntypes
+from numpy import ndarray, amax, amin, iscomplexobj, bool_
+from numpy import array as narray
+from numpy.lib.function_base import angle
+from numpy.compat import getargspec, formatargspec, long, basestring
+from numpy import expand_dims as n_expand_dims
+
+if sys.version_info[0] >= 3:
+    import pickle
+else:
+    import cPickle as pickle
 
 __author__ = "Pierre GF Gerard-Marchant"
 __docformat__ = "restructuredtext en"
@@ -66,23 +85,6 @@ __all__ = ['MAError', 'MaskError', 'MaskType', 'MaskedArray',
            'take', 'tan', 'tanh', 'trace', 'transpose', 'true_divide',
            'var', 'where',
            'zeros']
-
-import cPickle
-
-import numpy as np
-from numpy import ndarray, amax, amin, iscomplexobj, bool_
-from numpy import array as narray
-
-import numpy.core.umath as umath
-from numpy.lib.function_base import angle
-import numpy.core.numerictypes as ntypes
-from numpy.compat import getargspec, formatargspec
-from numpy import expand_dims as n_expand_dims
-import warnings
-
-import sys
-if sys.version_info[0] >= 3:
-    from functools import reduce
 
 MaskType = np.bool_
 nomask = MaskType(0)
@@ -628,7 +630,6 @@ def getdata(a, subok=True):
 
     Examples
     --------
-
     >>> import numpy.ma as ma
     >>> a = ma.masked_equal([[1,2],[3,4]], 2)
     >>> a
@@ -837,13 +838,9 @@ class _MaskedUnaryOperation:
         d = getdata(a)
         # Case 1.1. : Domained function
         if self.domain is not None:
-            # Save the error status
-            err_status_ini = np.geterr()
-            try:
+            with np.errstate():
                 np.seterr(divide='ignore', invalid='ignore')
                 result = self.f(d, *args, **kwargs)
-            finally:
-                np.seterr(**err_status_ini)
             # Make a mask
             m = ~umath.isfinite(result)
             m |= self.domain(d)
@@ -930,12 +927,9 @@ class _MaskedBinaryOperation:
         else:
             m = umath.logical_or(ma, mb)
         # Get the result
-        err_status_ini = np.geterr()
-        try:
+        with np.errstate():
             np.seterr(divide='ignore', invalid='ignore')
             result = self.f(da, db, *args, **kwargs)
-        finally:
-            np.seterr(**err_status_ini)
         # Case 1. : scalar
         if not result.ndim:
             if m:
@@ -1068,12 +1062,9 @@ class _DomainedBinaryOperation:
         (da, db) = (getdata(a, subok=False), getdata(b, subok=False))
         (ma, mb) = (getmask(a), getmask(b))
         # Get the result
-        err_status_ini = np.geterr()
-        try:
+        with np.errstate():
             np.seterr(divide='ignore', invalid='ignore')
             result = self.f(da, db, *args, **kwargs)
-        finally:
-            np.seterr(**err_status_ini)
         # Get the mask as a combination of ma, mb and invalid
         m = ~umath.isfinite(result)
         m |= ma
@@ -1261,7 +1252,6 @@ def getmask(a):
 
     Examples
     --------
-
     >>> import numpy.ma as ma
     >>> a = ma.masked_equal([[1,2],[3,4]], 2)
     >>> a
@@ -1323,7 +1313,6 @@ def getmaskarray(arr):
 
     Examples
     --------
-
     >>> import numpy.ma as ma
     >>> a = ma.masked_equal([[1,2],[3,4]], 2)
     >>> a
@@ -1531,7 +1520,7 @@ def make_mask_none(newshape, dtype=None):
     ----------
     newshape : tuple
         A tuple indicating the shape of the mask.
-    dtype: {None, dtype}, optional
+    dtype : {None, dtype}, optional
         If None, use a MaskType instance. Otherwise, use a new datatype with
         the same fields as `dtype`, converted to boolean types.
 
@@ -2541,7 +2530,7 @@ class MaskedIterator(object):
         if self.maskiter is not None:
             self.maskiter[index] = getmaskarray(value)
 
-    def next(self):
+    def __next__(self):
         """
         Return the next value, or raise StopIteration.
 
@@ -2563,12 +2552,12 @@ class MaskedIterator(object):
         StopIteration
 
         """
-        d = self.dataiter.next()
-        if self.maskiter is not None and self.maskiter.next():
+        d = next(self.dataiter)
+        if self.maskiter is not None and next(self.maskiter):
             d = masked
         return d
 
-
+    next = __next__
 
 
 class MaskedArray(ndarray):
@@ -2889,6 +2878,15 @@ class MaskedArray(ndarray):
         `dtype` is an ndarray sub-class), then the fill value is preserved.
         Finally, if `fill_value` is specified, but `dtype` is not, the fill
         value is set to the specified value.
+
+        For ``a.view(some_dtype)``, if ``some_dtype`` has a different number of
+        bytes per entry than the previous dtype (for example, converting a
+        regular array to a structured array), then the behavior of the view
+        cannot be predicted just from the superficial appearance of ``a`` (shown
+        by ``print(a)``). It also depends on exactly how ``a`` is stored in
+        memory. Therefore if ``a`` is C-ordered versus fortran-ordered, versus
+        defined as a slice or transpose, etc., the view may give different
+        results.
         """
 
         if dtype is None:
@@ -2995,7 +2993,7 @@ class MaskedArray(ndarray):
                 # We should always re-cast to mvoid, otherwise users can
                 # change masks on rows that already have masked values, but not
                 # on rows that have no masked values, which is inconsistent.
-                dout = mvoid(dout, mask=mask)
+                dout = mvoid(dout, mask=mask, hardmask=self._hardmask)
             # Just a scalar............
             elif _mask is not nomask and _mask[indx]:
                 return masked
@@ -3430,12 +3428,12 @@ class MaskedArray(ndarray):
             return np.asanyarray(fill_value)
         #
         if m.dtype.names:
-            result = self._data.copy()
+            result = self._data.copy('K')
             _recursive_filled(result, self._mask, fill_value)
         elif not m.any():
             return self._data
         else:
-            result = self._data.copy()
+            result = self._data.copy('K')
             try:
                 np.copyto(result, fill_value, where=m)
             except (TypeError, AttributeError):
@@ -3807,12 +3805,9 @@ class MaskedArray(ndarray):
         "Raise self to the power other, in place."
         other_data = getdata(other)
         other_mask = getmask(other)
-        err_status = np.geterr()
-        try:
+        with np.errstate():
             np.seterr(divide='ignore', invalid='ignore')
             ndarray.__ipow__(self._data, np.where(self._mask, 1, other_data))
-        finally:
-            np.seterr(**err_status)
         invalid = np.logical_not(np.isfinite(self._data))
         if invalid.any():
             if self._mask is not nomask:
@@ -5528,7 +5523,7 @@ class MaskedArray(ndarray):
         if memo is None:
             memo = {}
         memo[id(self)] = copied
-        for (k, v) in self.__dict__.iteritems():
+        for (k, v) in self.__dict__.items():
             copied.__dict__[k] = deepcopy(v, memo)
         return copied
 
@@ -5552,10 +5547,12 @@ class mvoid(MaskedArray):
     Fake a 'void' object to use for masked array with structured dtypes.
     """
     #
-    def __new__(self, data, mask=nomask, dtype=None, fill_value=None):
+    def __new__(self, data, mask=nomask, dtype=None, fill_value=None,
+                hardmask=False):
         dtype = dtype or data.dtype
         _data = np.array(data, dtype=dtype)
         _data = _data.view(self)
+        _data._hardmask = hardmask
         if mask is not nomask:
             if isinstance(mask, np.void):
                 _data._mask = mask
@@ -5585,7 +5582,10 @@ class mvoid(MaskedArray):
 
     def __setitem__(self, indx, value):
         self._data[indx] = value
-        self._mask[indx] |= getattr(value, "_mask", False)
+        if self._hardmask:
+            self._mask[indx] |= getattr(value, "_mask", False)
+        else:
+            self._mask[indx] = getattr(value, "_mask", False)
 
     def __str__(self):
         m = self._mask
@@ -5630,6 +5630,9 @@ class mvoid(MaskedArray):
                 else:
                     yield d
 
+    def __len__(self):
+        return self._data.__len__()
+
     def filled(self, fill_value=None):
         """
         Return a copy with masked fields filled with a given value.
@@ -5642,7 +5645,7 @@ class mvoid(MaskedArray):
 
         Returns
         -------
-        filled_void:
+        filled_void
             A `np.void` object
 
         See Also
@@ -5929,7 +5932,7 @@ def min(obj, axis=None, out=None, fill_value=None):
     try:
         return obj.min(axis=axis, fill_value=fill_value, out=out)
     except (AttributeError, TypeError):
-        # If obj doesn't have a max method,
+        # If obj doesn't have a min method,
         # ...or if the method doesn't accept a fill_value argument
         return asanyarray(obj).min(axis=axis, fill_value=fill_value, out=out)
 min.__doc__ = MaskedArray.min.__doc__
@@ -5948,7 +5951,7 @@ def ptp(obj, axis=None, out=None, fill_value=None):
     try:
         return obj.ptp(axis, out=out, fill_value=fill_value)
     except (AttributeError, TypeError):
-        # If obj doesn't have a max method,
+        # If obj doesn't have a ptp method,
         # ...or if the method doesn't accept a fill_value argument
         return asanyarray(obj).ptp(axis=axis, fill_value=fill_value, out=out)
 ptp.__doc__ = MaskedArray.ptp.__doc__
@@ -5967,9 +5970,10 @@ class _frommethod:
         Name of the method to transform.
 
     """
-    def __init__(self, methodname):
+    def __init__(self, methodname, reversed=False):
         self.__name__ = methodname
         self.__doc__ = self.getdoc()
+        self.reversed = reversed
     #
     def getdoc(self):
         "Return the doc of the function (from the doc of the method)."
@@ -5981,6 +5985,11 @@ class _frommethod:
             return doc
     #
     def __call__(self, a, *args, **params):
+        if self.reversed:
+            args = list(args)
+            arr = args[0]
+            args[0] = a
+            a = arr
         # Get the method from the array (if possible)
         method_name = self.__name__
         method = getattr(a, method_name, None)
@@ -5997,7 +6006,7 @@ class _frommethod:
 all = _frommethod('all')
 anomalies = anom = _frommethod('anom')
 any = _frommethod('any')
-compress = _frommethod('compress')
+compress = _frommethod('compress', reversed=True)
 cumprod = _frommethod('cumprod')
 cumsum = _frommethod('cumsum')
 copy = _frommethod('copy')
@@ -6061,12 +6070,9 @@ def power(a, b, third=None):
     else:
         basetype = MaskedArray
     # Get the result and view it as a (subclass of) MaskedArray
-    err_status = np.geterr()
-    try:
+    with np.errstate():
         np.seterr(divide='ignore', invalid='ignore')
         result = np.where(m, fa, umath.power(fa, fb)).view(basetype)
-    finally:
-        np.seterr(**err_status)
     result._update_from(a)
     # Find where we're in trouble w/ NaNs and Infs
     invalid = np.logical_not(np.isfinite(result.view(ndarray)))
@@ -7029,7 +7035,7 @@ def dump(a, F):
     """
     if not hasattr(F, 'readline'):
         F = open(F, 'w')
-    return cPickle.dump(a, F)
+    return pickle.dump(a, F)
 
 def dumps(a):
     """
@@ -7044,7 +7050,7 @@ def dumps(a):
         returned.
 
     """
-    return cPickle.dumps(a)
+    return pickle.dumps(a)
 
 def load(F):
     """
@@ -7068,7 +7074,7 @@ def load(F):
     """
     if not hasattr(F, 'readline'):
         F = open(F, 'r')
-    return cPickle.load(F)
+    return pickle.load(F)
 
 def loads(strg):
     """
@@ -7086,7 +7092,7 @@ def loads(strg):
     dumps : Return a string corresponding to the pickling of a masked array.
 
     """
-    return cPickle.loads(strg)
+    return pickle.loads(strg)
 
 ################################################################################
 def fromfile(file, dtype=float, count= -1, sep=''):

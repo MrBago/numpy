@@ -1,8 +1,21 @@
+from __future__ import division, absolute_import, print_function
+
 from numpy.testing import TestCase, run_module_suite, assert_,\
         assert_raises
 from numpy import random
 from numpy.compat import asbytes
 import numpy as np
+
+
+class TestBinomial(TestCase):
+    def test_n_zero(self):
+        # Tests the corner case of n == 0 for the binomial distribution.
+        # binomial(0, p) should be zero for any p in [0, 1].
+        # This test addresses issue #3480.
+        zeros = np.zeros(2, dtype='int')
+        for p in [0, .5, 1]:
+            assert_(random.binomial(0, p) == 0)
+            np.testing.assert_array_equal(random.binomial(zeros, p), zeros)
 
 
 class TestMultinomial(TestCase):
@@ -149,7 +162,8 @@ class TestRandomDist(TestCase):
 
     def test_choice_exceptions(self):
         sample = np.random.choice
-        assert_raises(ValueError, sample, -1,3)
+        assert_raises(ValueError, sample, -1, 3)
+        assert_raises(ValueError, sample, 3., 3)
         assert_raises(ValueError, sample, [[1,2],[3,4]], 3)
         assert_raises(ValueError, sample, [], 3)
         assert_raises(ValueError, sample, [1,2,3,4], 3,
@@ -169,6 +183,11 @@ class TestRandomDist(TestCase):
         assert_(np.isscalar(np.random.choice(2, replace=True, p=p)))
         assert_(np.isscalar(np.random.choice(2, replace=False, p=p)))
         assert_(np.isscalar(np.random.choice([1,2], replace=True)))
+        assert_(np.random.choice([None], replace=True) is None)
+        a = np.array([1, 2])
+        arr = np.empty(1, dtype=object)
+        arr[0] = a
+        assert_(np.random.choice(arr, replace=True) is a)
 
         # Check 0-d array
         s = tuple()
@@ -177,6 +196,11 @@ class TestRandomDist(TestCase):
         assert_(not np.isscalar(np.random.choice(2, s, replace=True, p=p)))
         assert_(not np.isscalar(np.random.choice(2, s, replace=False, p=p)))
         assert_(not np.isscalar(np.random.choice([1,2], s, replace=True)))
+        assert_(np.random.choice([None], s, replace=True).ndim == 0)
+        a = np.array([1, 2])
+        arr = np.empty(1, dtype=object)
+        arr[0] = a
+        assert_(np.random.choice(arr, s, replace=True).item() is a)
 
         # Check multi dimensional array
         s = (2,3)
@@ -288,6 +312,24 @@ class TestRandomDist(TestCase):
         desired = np.array([[10, 10],
                          [10, 10],
                          [ 9,  9]])
+        np.testing.assert_array_equal(actual, desired)
+
+        # Test nbad = 0
+        actual = np.random.hypergeometric(5, 0, 3, size=4)
+        desired = np.array([3, 3, 3, 3])
+        np.testing.assert_array_equal(actual, desired)
+
+        actual = np.random.hypergeometric(15, 0, 12, size=4)
+        desired = np.array([12, 12, 12, 12])
+        np.testing.assert_array_equal(actual, desired)
+
+        # Test ngood = 0
+        actual = np.random.hypergeometric(0, 5, 3, size=4)
+        desired = np.array([0, 0, 0, 0])
+        np.testing.assert_array_equal(actual, desired)
+
+        actual = np.random.hypergeometric(0, 15, 12, size=4)
+        desired = np.array([0, 0, 0, 0])
         np.testing.assert_array_equal(actual, desired)
 
     def test_laplace(self):

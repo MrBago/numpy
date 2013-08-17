@@ -1,6 +1,7 @@
-""" Test functions for matrix module
+"""Test functions for matrix module
 
 """
+from __future__ import division, absolute_import, print_function
 
 from numpy.testing import *
 
@@ -190,7 +191,7 @@ class TestHistogram2d(TestCase):
         assert_array_equal(H.T, answer)
         H = histogram2d(x, y, xedges)[0]
         assert_array_equal(H.T, answer)
-        H,xedges,yedges = histogram2d(range(10),range(10))
+        H,xedges,yedges = histogram2d(list(range(10)),list(range(10)))
         assert_array_equal(H, eye(10,10))
         assert_array_equal(xedges, np.linspace(0,9,11))
         assert_array_equal(yedges, np.linspace(0,9,11))

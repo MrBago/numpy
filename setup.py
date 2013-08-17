@@ -11,7 +11,9 @@ interfacing with general-purpose data-base applications.
 
 There are also basic facilities for discrete fourier transform,
 basic linear algebra and random number generation.
+
 """
+from __future__ import division, print_function
 
 DOCLINES = __doc__.split("\n")
 
@@ -21,10 +23,13 @@ import sys
 import re
 import subprocess
 
-if sys.version_info[0] < 3:
-    import __builtin__ as builtins
-else:
+if sys.version_info[:2] < (2, 6) or (3, 0) <= sys.version_info[0:2] < (3, 2):
+    raise RuntimeError("Python version 2.6, 2.7 or >= 3.2 required.")
+
+if sys.version_info[0] >= 3:
     import builtins
+else:
+    import __builtin__ as builtins
 
 CLASSIFIERS = """\
 Development Status :: 5 - Production/Stable
@@ -50,7 +55,7 @@ LONG_DESCRIPTION    = "\n".join(DOCLINES[2:])
 URL                 = "http://www.numpy.org"
 DOWNLOAD_URL        = "http://sourceforge.net/projects/numpy/files/NumPy/"
 LICENSE             = 'BSD'
-CLASSIFIERS         = filter(None, CLASSIFIERS.split('\n'))
+CLASSIFIERS         = [_f for _f in CLASSIFIERS.split('\n') if _f]
 AUTHOR              = "Travis E. Oliphant et al."
 AUTHOR_EMAIL        = "oliphant@enthought.com"
 PLATFORMS           = ["Windows", "Linux", "Solaris", "Mac OS-X", "Unix"]
@@ -152,34 +157,7 @@ def configuration(parent_package='',top_path=None):
 
 def setup_package():
 
-    # Perform 2to3 if needed
-    local_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-    src_path = local_path
-
-    if sys.version_info[0] == 3:
-        src_path = os.path.join(local_path, 'build', 'py3k')
-        sys.path.insert(0, os.path.join(local_path, 'tools'))
-        import py3tool
-        print("Converting to Python3 via 2to3...")
-        py3tool.sync_2to3('numpy', os.path.join(src_path, 'numpy'))
-
-        site_cfg = os.path.join(local_path, 'site.cfg')
-        if os.path.isfile(site_cfg):
-            shutil.copy(site_cfg, src_path)
-
-        # Ugly hack to make pip work with Python 3, see #1857.
-        # Explanation: pip messes with __file__ which interacts badly with the
-        # change in directory due to the 2to3 conversion.  Therefore we restore
-        # __file__ to what it would have been otherwise.
-        global __file__
-        __file__ = os.path.join(os.curdir, os.path.basename(__file__))
-        if '--egg-base' in sys.argv:
-            # Change pip-egg-info entry to absolute path, so pip can find it
-            # after changing directory.
-            idx = sys.argv.index('--egg-base')
-            if sys.argv[idx + 1] == 'pip-egg-info':
-                sys.argv[idx + 1] = os.path.join(local_path, 'pip-egg-info')
-
+    src_path = os.path.dirname(os.path.abspath(sys.argv[0]))
     old_path = os.getcwd()
     os.chdir(src_path)
     sys.path.insert(0, src_path)

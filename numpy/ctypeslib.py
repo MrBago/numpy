@@ -49,6 +49,8 @@ Then, we're ready to call ``foo_func``:
 >>> _lib.foo_func(out, len(out))                #doctest: +SKIP
 
 """
+from __future__ import division, absolute_import, print_function
+
 __all__ = ['load_library', 'ndpointer', 'test', 'ctypes_load_library',
            'c_intp', 'as_ctypes', 'as_array']
 
@@ -100,17 +102,11 @@ else:
             from numpy.distutils.misc_util import get_shared_lib_extension
             so_ext = get_shared_lib_extension()
             libname_ext = [libname + so_ext]
-            if sys.version[:3] >= '3.2':
-                # For Python >= 3.2 a tag may be added to lib extension
-                # (platform dependent).  If we find such a tag, try both with
-                # and without it.
-                so_ext2 = get_shared_lib_extension(is_python_ext=True)
-                if not so_ext2 == so_ext:
-                    libname_ext.insert(0, libname + so_ext2)
-            if sys.platform == 'win32':
-                libname_ext.insert(0, '%s.dll' % libname)
-            elif sys.platform == 'darwin':
-                libname_ext.insert(0, '%s.dylib' % libname)
+            # mac, windows and linux >= py3.2 shared library and loadable
+            # module have different extensions so try both
+            so_ext2 = get_shared_lib_extension(is_python_ext=True)
+            if not so_ext2 == so_ext:
+                libname_ext.insert(0, libname + so_ext2)
         else:
             libname_ext = [libname]
 
@@ -120,15 +116,16 @@ else:
         else:
             libdir = loader_path
 
-        # Need to save exception when using Python 3k, see PEP 3110.
-        exc = None
         for ln in libname_ext:
-            try:
-                libpath = os.path.join(libdir, ln)
-                return ctypes.cdll[libpath]
-            except OSError as e:
-                exc = e
-        raise exc
+            libpath = os.path.join(libdir, ln)
+            if os.path.exists(libpath):
+                try:
+                    return ctypes.cdll[libpath]
+                except OSError:
+                    ## defective lib file
+                    raise
+        ## if no successful return in the libname_ext loop:
+        raise OSError("no file with expected extension")
 
     ctypes_load_library = deprecate(load_library, 'ctypes_load_library',
                                     'load_library')
@@ -352,7 +349,7 @@ if ctypes is not None:
 
         shape = []
         ob = array_type
-        while type(ob) == _ARRAY_TYPE:
+        while type(ob) is _ARRAY_TYPE:
             shape.append(ob._length_)
             ob = ob._type_
         shape = tuple(shape)

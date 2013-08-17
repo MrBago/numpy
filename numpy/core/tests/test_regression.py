@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import, print_function
+
 import pickle
 import sys
 import platform
@@ -5,20 +7,17 @@ import gc
 import copy
 import warnings
 import tempfile
-from StringIO import StringIO
 from os import path
+from io import BytesIO
+
 import numpy as np
 from numpy.testing import (
         run_module_suite, TestCase, assert_, assert_equal,
         assert_almost_equal, assert_array_equal, assert_array_almost_equal,
         assert_raises, assert_warns, dec
         )
-from numpy.testing.utils import _assert_valid_refcount, WarningManager
-from numpy.compat import asbytes, asunicode, asbytes_nested
-
-if sys.version_info[0] >= 3:
-    import io
-    StringIO = io.BytesIO
+from numpy.testing.utils import _assert_valid_refcount
+from numpy.compat import asbytes, asunicode, asbytes_nested, long, sixu
 
 rlevel = 1
 
@@ -35,7 +34,7 @@ class TestRegression(TestCase):
     def test_pickle_transposed(self,level=rlevel):
         """Ticket #16"""
         a = np.transpose(np.array([[2,9],[7,0],[3,8]]))
-        f = StringIO()
+        f = BytesIO()
         pickle.dump(a,f)
         f.seek(0)
         b = pickle.load(f)
@@ -88,7 +87,7 @@ class TestRegression(TestCase):
 
     def test_char_dump(self,level=rlevel):
         """Ticket #50"""
-        f = StringIO()
+        f = BytesIO()
         ca = np.char.array(np.arange(1000,1010),itemsize=4)
         ca.dump(f)
         f.seek(0)
@@ -139,7 +138,7 @@ class TestRegression(TestCase):
     def test_unicode_swapping(self,level=rlevel):
         """Ticket #79"""
         ulen = 1
-        ucs_value = u'\U0010FFFF'
+        ucs_value = sixu('\U0010FFFF')
         ua = np.array([[[ucs_value*ulen]*2]*3]*4, dtype='U%s' % ulen)
         ua2 = ua.newbyteorder()
 
@@ -238,7 +237,7 @@ class TestRegression(TestCase):
     def test_argmax(self,level=rlevel):
         """Ticket #119"""
         a = np.random.normal(0,1,(4,5,6,7,8))
-        for i in xrange(a.ndim):
+        for i in range(a.ndim):
             aargmax = a.argmax(i)
 
     def test_mem_divmod(self,level=rlevel):
@@ -263,6 +262,11 @@ class TestRegression(TestCase):
     def test_add_identity(self,level=rlevel):
         """Ticket #143"""
         assert_equal(0,np.add.identity)
+
+    def test_numpy_float_python_long_addition(self):
+        # Check that numpy float and python longs can be added correctly.
+        a = np.float_(23.) + 2**135
+        assert_equal(a, 23. + 2**135)
 
     def test_binary_repr_0(self,level=rlevel):
         """Ticket #151"""
@@ -320,7 +324,7 @@ class TestRegression(TestCase):
     def test_unpickle_dtype_with_object(self,level=rlevel):
         """Implemented in r2840"""
         dt = np.dtype([('x',int),('y',np.object_),('z','O')])
-        f = StringIO()
+        f = BytesIO()
         pickle.dump(dt,f)
         f.seek(0)
         dt_ = pickle.load(f)
@@ -384,7 +388,6 @@ class TestRegression(TestCase):
 
     def test_pickle_dtype(self,level=rlevel):
         """Ticket #251"""
-        import pickle
         pickle.dumps(np.float)
 
     def test_swap_real(self, level=rlevel):
@@ -545,6 +548,9 @@ class TestRegression(TestCase):
         a = np.ones((0,2))
         a.shape = (-1,2)
 
+    # Cannot test if NPY_RELAXED_STRIDES_CHECKING changes the strides.
+    # With NPY_RELAXED_STRIDES_CHECKING the test becomes superfluous.
+    @dec.skipif(np.ones(1).strides[0] == np.iinfo(np.intp).max)
     def test_reshape_trailing_ones_strides(self):
         # Github issue gh-2949, bad strides for trailing ones of new shape
         a = np.zeros(12, dtype=np.int32)[::2] # not contiguous
@@ -649,11 +655,8 @@ class TestRegression(TestCase):
     def test_array_str_64bit(self, level=rlevel):
         """Ticket #501"""
         s = np.array([1, np.nan],dtype=np.float64)
-        errstate = np.seterr(all='raise')
-        try:
+        with np.errstate(all='raise'):
             sstr = np.array_str(s)
-        finally:
-            np.seterr(**errstate)
 
     def test_frompyfunc_endian(self, level=rlevel):
         """Ticket #503"""
@@ -673,7 +676,7 @@ class TestRegression(TestCase):
     def test_arr_transpose(self, level=rlevel):
         """Ticket #516"""
         x = np.random.rand(*(2,)*16)
-        y = x.transpose(range(16))
+        y = x.transpose(list(range(16)))
 
     def test_string_mergesort(self, level=rlevel):
         """Ticket #540"""
@@ -720,10 +723,9 @@ class TestRegression(TestCase):
 
     def test_unicode_scalar(self, level=rlevel):
         """Ticket #600"""
-        import cPickle
         x = np.array(["DROND", "DROND1"], dtype="U6")
         el = x[1]
-        new = cPickle.loads(cPickle.dumps(el))
+        new = pickle.loads(pickle.dumps(el))
         assert_equal(new, el)
 
     def test_arange_non_native_dtype(self, level=rlevel):
@@ -797,6 +799,10 @@ class TestRegression(TestCase):
         """Ticket #658"""
         np.indices((0,3,4)).T.reshape(-1,3)
 
+    # Cannot test if NPY_RELAXED_STRIDES_CHECKING changes the strides.
+    # With NPY_RELAXED_STRIDES_CHECKING the test becomes superfluous,
+    # 0-sized reshape itself is tested elsewhere.
+    @dec.skipif(np.ones(1).strides[0] == np.iinfo(np.intp).max)
     def test_copy_detection_corner_case2(self, level=rlevel):
         """Ticket #771: strides are not set correctly when reshaping 0-sized
         arrays"""
@@ -1103,7 +1109,7 @@ class TestRegression(TestCase):
         for i in range(1,9) :
             msg = 'unicode offset: %d chars'%i
             t = np.dtype([('a','S%d'%i),('b','U2')])
-            x = np.array([(asbytes('a'),u'b')], dtype=t)
+            x = np.array([(asbytes('a'),sixu('b'))], dtype=t)
             if sys.version_info[0] >= 3:
                 assert_equal(str(x), "[(b'a', 'b')]", err_msg=msg)
             else:
@@ -1111,14 +1117,11 @@ class TestRegression(TestCase):
 
     def test_sign_for_complex_nan(self, level=rlevel):
         """Ticket 794."""
-        olderr = np.seterr(invalid='ignore')
-        try:
+        with np.errstate(invalid='ignore'):
             C = np.array([-np.inf, -2+1j, 0, 2-1j, np.inf, np.nan])
             have = np.sign(C)
             want = np.array([-1+0j, -1+0j, 0+0j, 1+0j, 1+0j, np.nan])
             assert_equal(have, want)
-        finally:
-            np.seterr(**olderr)
 
     def test_for_equal_names(self, level=rlevel):
         """Ticket #674"""
@@ -1160,8 +1163,7 @@ class TestRegression(TestCase):
 
     def test_errobj_reference_leak(self, level=rlevel):
         """Ticket #955"""
-        old_err = np.seterr(all="ignore")
-        try:
+        with np.errstate(all="ignore"):
             z = int(0)
             p = np.int32(-1)
 
@@ -1171,8 +1173,6 @@ class TestRegression(TestCase):
             gc.collect()
             n_after = len(gc.get_objects())
             assert_(n_before >= n_after, (n_before, n_after))
-        finally:
-            np.seterr(**old_err)
 
     def test_void_scalar_with_titles(self, level=rlevel):
         """No ticket"""
@@ -1182,11 +1182,34 @@ class TestRegression(TestCase):
         assert_(arr[0][0] == 'john')
         assert_(arr[0][1] == 4)
 
+    def test_void_scalar_constructor(self):
+        #Issue #1550
+
+        #Create test string data, construct void scalar from data and assert
+        #that void scalar contains original data.
+        test_string = np.array("test")
+        test_string_void_scalar = np.core.multiarray.scalar(
+            np.dtype(("V",test_string.dtype.itemsize)), test_string.tostring())
+
+        assert_(test_string_void_scalar.view(test_string.dtype) == test_string)
+
+        #Create record scalar, construct from data and assert that
+        #reconstructed scalar is correct.
+        test_record = np.ones((), "i,i")
+        test_record_void_scalar = np.core.multiarray.scalar(
+            test_record.dtype, test_record.tostring())
+
+        assert_(test_record_void_scalar == test_record)
+
+        #Test pickle and unpickle of void and record scalars
+        assert_(pickle.loads(pickle.dumps(test_string)) == test_string)
+        assert_(pickle.loads(pickle.dumps(test_record)) == test_record)
+
     def test_blasdot_uninitialized_memory(self):
         """Ticket #950"""
         for m in [0, 1, 2]:
             for n in [0, 1, 2]:
-                for k in xrange(3):
+                for k in range(3):
                     # Try to ensure that x->data contains non-zero floats
                     x = np.array([123456789e199], dtype=np.float64)
                     x.resize((m, 0))
@@ -1227,8 +1250,8 @@ class TestRegression(TestCase):
 
     def test_fromiter_bytes(self):
         """Ticket #1058"""
-        a = np.fromiter(range(10), dtype='b')
-        b = np.fromiter(range(10), dtype='B')
+        a = np.fromiter(list(range(10)), dtype='b')
+        b = np.fromiter(list(range(10)), dtype='B')
         assert_(np.alltrue(a == np.array([0,1,2,3,4,5,6,7,8,9])))
         assert_(np.alltrue(b == np.array([0,1,2,3,4,5,6,7,8,9])))
 
@@ -1287,21 +1310,24 @@ class TestRegression(TestCase):
 
     def test_unicode_to_string_cast(self):
         """Ticket #1240."""
-        a = np.array([[u'abc', u'\u03a3'], [u'asdf', u'erw']], dtype='U')
+        a = np.array(
+                [   [sixu('abc'), sixu('\u03a3')],
+                    [sixu('asdf'), sixu('erw')]
+                ], dtype='U')
         def fail():
             b = np.array(a, 'S4')
         self.assertRaises(UnicodeEncodeError, fail)
 
     def test_mixed_string_unicode_array_creation(self):
-        a = np.array(['1234', u'123'])
+        a = np.array(['1234', sixu('123')])
         assert_(a.itemsize == 16)
-        a = np.array([u'123', '1234'])
+        a = np.array([sixu('123'), '1234'])
         assert_(a.itemsize == 16)
-        a = np.array(['1234', u'123', '12345'])
+        a = np.array(['1234', sixu('123'), '12345'])
         assert_(a.itemsize == 20)
-        a = np.array([u'123', '1234', u'12345'])
+        a = np.array([sixu('123'), '1234', sixu('12345')])
         assert_(a.itemsize == 20)
-        a = np.array([u'123', '1234', u'1234'])
+        a = np.array([sixu('123'), '1234', sixu('1234')])
         assert_(a.itemsize == 16)
 
     def test_misaligned_objects_segfault(self):
@@ -1380,12 +1406,9 @@ class TestRegression(TestCase):
             min = np.array([np.iinfo(t).min])
             min //= -1
 
-        old_err = np.seterr(divide="ignore")
-        try:
+        with np.errstate(divide="ignore"):
             for t in (np.int8, np.int16, np.int32, np.int64, np.int, np.long):
                 test_type(t)
-        finally:
-            np.seterr(**old_err)
 
     def test_buffer_hashlib(self):
         try:
@@ -1411,8 +1434,8 @@ class TestRegression(TestCase):
         assert_(np.isfinite(np.log1p(np.exp2(-53))))
 
     def test_fromiter_comparison(self, level=rlevel):
-        a = np.fromiter(range(10), dtype='b')
-        b = np.fromiter(range(10), dtype='B')
+        a = np.fromiter(list(range(10)), dtype='b')
+        b = np.fromiter(list(range(10)), dtype='B')
         assert_(np.alltrue(a == np.array([0,1,2,3,4,5,6,7,8,9])))
         assert_(np.alltrue(b == np.array([0,1,2,3,4,5,6,7,8,9])))
 
@@ -1426,14 +1449,17 @@ class TestRegression(TestCase):
                       and not issubclass(x, np.timedelta64))]
         a = np.array([], dtypes[0])
         failures = []
-        for x in dtypes:
-            b = a.astype(x)
-            for y in dtypes:
-                c = a.astype(y)
-                try:
-                    np.dot(b, c)
-                except TypeError as e:
-                    failures.append((x, y))
+        # ignore complex warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', np.ComplexWarning)
+            for x in dtypes:
+                b = a.astype(x)
+                for y in dtypes:
+                    c = a.astype(y)
+                    try:
+                        np.dot(b, c)
+                    except TypeError as e:
+                        failures.append((x, y))
         if failures:
             raise AssertionError("Failures: %r" % failures)
 
@@ -1522,13 +1548,9 @@ class TestRegression(TestCase):
         for tp in [np.csingle, np.cdouble, np.clongdouble]:
             x = tp(1+2j)
             assert_warns(np.ComplexWarning, float, x)
-            warn_ctx = WarningManager()
-            warn_ctx.__enter__()
-            try:
+            with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 assert_equal(float(x), float(x.real))
-            finally:
-                warn_ctx.__exit__()
 
     def test_complex_scalar_complex_cast(self):
         for tp in [np.csingle, np.cdouble, np.clongdouble]:
@@ -1548,7 +1570,7 @@ class TestRegression(TestCase):
         assert_equal(int(np.uint64(x)), x)
 
     def test_duplicate_field_names_assign(self):
-        ra = np.fromiter(((i*3, i*2) for i in xrange(10)), dtype='i8,f8')
+        ra = np.fromiter(((i*3, i*2) for i in range(10)), dtype='i8,f8')
         ra.dtype.names = ('f1', 'f2')
         rep = repr(ra) # should not cause a segmentation fault
         assert_raises(ValueError, setattr, ra.dtype, 'names', ('f1', 'f1'))
@@ -1817,7 +1839,7 @@ class TestRegression(TestCase):
         if sys.version_info[0] >= 3:
             a = np.array(['abcd'])
         else:
-            a = np.array([u'abcd'])
+            a = np.array([sixu('abcd')])
         assert_equal(a.dtype.itemsize, 16)
 
     def test_unique_stable(self):
@@ -1868,7 +1890,19 @@ class TestRegression(TestCase):
                               order='F')
         assert_array_equal(arr2, data_back)
 
+    def test_structured_count_nonzero(self):
+        arr = np.array([0, 1]).astype('i4, (2)i4')[:1]
+        count = np.count_nonzero(arr)
+        assert_equal(count, 0)
 
+    def test_copymodule_preserves_f_contiguity(self):
+        a = np.empty((2, 2), order='F')
+        b = copy.copy(a)
+        c = copy.deepcopy(a)
+        assert_(b.flags.fortran)
+        assert_(b.flags.f_contiguous)
+        assert_(c.flags.fortran)
+        assert_(c.flags.f_contiguous)
 
 
 if __name__ == "__main__":

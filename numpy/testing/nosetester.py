@@ -4,10 +4,14 @@ Nose test running.
 This module implements ``test()`` and ``bench()`` functions for NumPy modules.
 
 """
+from __future__ import division, absolute_import, print_function
+
 import os
 import sys
 import warnings
-import numpy.testing.utils
+from numpy.compat import basestring
+from numpy import ModuleDeprecationWarning
+
 
 def get_package_name(filepath):
     """
@@ -56,7 +60,6 @@ def import_nose():
     minimum_nose_version = (0,10,0)
     try:
         import nose
-        from nose.tools import raises
     except ImportError:
         fine_nose = False
     else:
@@ -185,6 +188,14 @@ class NoseTester(object):
                 label = 'not slow'
             argv += ['-A', label]
         argv += ['--verbosity', str(verbose)]
+
+        # When installing with setuptools, and also in some other cases, the
+        # test_*.py files end up marked +x executable. Nose, by default, does
+        # not run files marked with +x as they might be scripts. However, in
+        # our case nose only looks for test_*.py files under the package
+        # directory, which should be safe.
+        argv += ['--exe']
+
         if extra_argv:
             argv += extra_argv
         return argv
@@ -193,19 +204,19 @@ class NoseTester(object):
         nose = import_nose()
 
         import numpy
-        print "NumPy version %s" % numpy.__version__
+        print("NumPy version %s" % numpy.__version__)
         npdir = os.path.dirname(numpy.__file__)
-        print "NumPy is installed in %s" % npdir
+        print("NumPy is installed in %s" % npdir)
 
         if 'scipy' in self.package_name:
             import scipy
-            print "SciPy version %s" % scipy.__version__
+            print("SciPy version %s" % scipy.__version__)
             spdir = os.path.dirname(scipy.__file__)
-            print "SciPy is installed in %s" % spdir
+            print("SciPy is installed in %s" % spdir)
 
         pyversion = sys.version.replace('\n','')
-        print "Python version %s" % pyversion
-        print "nose version %d.%d.%d" % nose.__versioninfo__
+        print("Python version %s" % pyversion)
+        print("nose version %d.%d.%d" % nose.__versioninfo__)
 
     def _get_custom_doctester(self):
         """ Return instantiated plugin for doctests
@@ -214,7 +225,7 @@ class NoseTester(object):
 
         A return value of None means use the nose builtin doctest plugin
         """
-        from noseclasses import NumpyDoctest
+        from .noseclasses import NumpyDoctest
         return NumpyDoctest()
 
     def prepare_test_args(self, label='fast', verbose=1, extra_argv=None,
@@ -243,7 +254,7 @@ class NoseTester(object):
                    '--cover-tests', '--cover-erase']
         # construct list of plugins
         import nose.plugins.builtin
-        from noseclasses import KnownFailure, Unplugger
+        from .noseclasses import KnownFailure, Unplugger
         plugins = [KnownFailure()]
         plugins += [p() for p in nose.plugins.builtin.plugins]
         # add doctesting if required
@@ -329,13 +340,13 @@ class NoseTester(object):
         # cap verbosity at 3 because nose becomes *very* verbose beyond that
         verbose = min(verbose, 3)
 
-        import utils
+        from . import utils
         utils.verbose = verbose
 
         if doctests:
-            print "Running unit tests and doctests for %s" % self.package_name
+            print("Running unit tests and doctests for %s" % self.package_name)
         else:
-            print "Running unit tests for %s" % self.package_name
+            print("Running unit tests for %s" % self.package_name)
 
         self._show_system_info()
 
@@ -351,31 +362,28 @@ class NoseTester(object):
         if raise_warnings in _warn_opts.keys():
             raise_warnings = _warn_opts[raise_warnings]
 
-        # Preserve the state of the warning filters
-        warn_ctx = numpy.testing.utils.WarningManager()
-        warn_ctx.__enter__()
-        # Reset the warning filters to the default state,
-        # so that running the tests is more repeatable.
-        warnings.resetwarnings()
-        # If deprecation warnings are not set to 'error' below,
-        # at least set them to 'warn'.
-        warnings.filterwarnings('always', category=DeprecationWarning)
-        # Force the requested warnings to raise
-        for warningtype in raise_warnings:
-            warnings.filterwarnings('error', category=warningtype)
-        # Filter out annoying import messages.
-        warnings.filterwarnings('ignore', message='Not importing directory')
-        warnings.filterwarnings("ignore", message="numpy.dtype size changed")
-        warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+        with warnings.catch_warnings():
+            # Reset the warning filters to the default state,
+            # so that running the tests is more repeatable.
+            warnings.resetwarnings()
+            # If deprecation warnings are not set to 'error' below,
+            # at least set them to 'warn'.
+            warnings.filterwarnings('always', category=DeprecationWarning)
+            # Force the requested warnings to raise
+            for warningtype in raise_warnings:
+                warnings.filterwarnings('error', category=warningtype)
+            # Filter out annoying import messages.
+            warnings.filterwarnings('ignore', message='Not importing directory')
+            warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+            warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+            warnings.filterwarnings("ignore", category=ModuleDeprecationWarning)
+            warnings.filterwarnings("ignore", category=FutureWarning)
 
-        try:
-            from noseclasses import NumpyTestProgram
+            from .noseclasses import NumpyTestProgram
 
-            argv, plugins = self.prepare_test_args(label,
-                    verbose, extra_argv, doctests, coverage)
+            argv, plugins = self.prepare_test_args(
+                    label, verbose, extra_argv, doctests, coverage)
             t = NumpyTestProgram(argv=argv, exit=False, plugins=plugins)
-        finally:
-            warn_ctx.__exit__()
 
         return t.result
 
@@ -435,7 +443,7 @@ class NoseTester(object):
 
         """
 
-        print "Running benchmarks for %s" % self.package_name
+        print("Running benchmarks for %s" % self.package_name)
         self._show_system_info()
 
         argv = self._test_argv(label, verbose, extra_argv)
@@ -445,7 +453,7 @@ class NoseTester(object):
         nose = import_nose()
 
         # get plugin to disable doctests
-        from noseclasses import Unplugger
+        from .noseclasses import Unplugger
         add_plugins = [Unplugger('doctest')]
 
         return nose.run(argv=argv, addplugins=add_plugins)

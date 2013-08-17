@@ -1,7 +1,7 @@
 """Tests for laguerre module.
 
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 import numpy.polynomial.laguerre as lag
@@ -250,7 +250,7 @@ class TestIntegral(TestCase) :
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = lag.lagint(tgt, m=1, k=[k])
-                res = lag.lagint(pol, m=j, k=range(j))
+                res = lag.lagint(pol, m=j, k=list(range(j)))
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with lbnd
@@ -260,7 +260,7 @@ class TestIntegral(TestCase) :
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = lag.lagint(tgt, m=1, k=[k], lbnd=-1)
-                res = lag.lagint(pol, m=j, k=range(j), lbnd=-1)
+                res = lag.lagint(pol, m=j, k=list(range(j)), lbnd=-1)
                 assert_almost_equal(trim(res), trim(tgt))
 
         # check multiple integrations with scaling
@@ -270,7 +270,7 @@ class TestIntegral(TestCase) :
                 tgt = pol[:]
                 for k in range(j) :
                     tgt = lag.lagint(tgt, m=1, k=[k], scl=2)
-                res = lag.lagint(pol, m=j, k=range(j), scl=2)
+                res = lag.lagint(pol, m=j, k=list(range(j)), scl=2)
                 assert_almost_equal(trim(res), trim(tgt))
 
     def test_lagint_axis(self):
@@ -424,6 +424,22 @@ class TestFitting(TestCase):
         # is zero when summed.
         x = [1, 1j, -1, -1j]
         assert_almost_equal(lag.lagfit(x, x, 1), [1, -1])
+
+
+class TestCompanion(TestCase):
+
+    def test_raises(self):
+        assert_raises(ValueError, lag.lagcompanion, [])
+        assert_raises(ValueError, lag.lagcompanion, [1])
+
+    def test_dimensions(self):
+        for i in range(1, 5):
+            coef = [0]*i + [1]
+            assert_(lag.lagcompanion(coef).shape == (i, i))
+
+    def test_linear_root(self):
+        assert_(lag.lagcompanion([1, 2])[0, 0] == 1.5)
+
 
 class TestGauss(TestCase):
 

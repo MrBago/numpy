@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-# Copied from fftpack.helper by Pearu Peterson, October 2005
-""" Test functions for fftpack.helper module
+"""Test functions for fftpack.helper module
+
+Copied from fftpack.helper by Pearu Peterson, October 2005
+
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
 from numpy.testing import TestCase, run_module_suite, assert_array_almost_equal

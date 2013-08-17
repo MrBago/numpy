@@ -6,7 +6,10 @@ Note that :class:`numpy.ma.MaskedArray` already supports structured datatypes
 and the masking of individual fields.
 
 :author: Pierre Gerard-Marchant
+
 """
+from __future__ import division, absolute_import, print_function
+
 #!!!: * We should make sure that no field is called '_mask','mask','_fieldmask',
 #!!!:   or whatever restricted keywords.
 #!!!:   An idea would be to no bother in the first place, and then rename the
@@ -17,13 +20,17 @@ and the masking of individual fields.
 __author__ = "Pierre GF Gerard-Marchant"
 
 import sys
+import warnings
 
 import numpy as np
-from numpy import bool_, dtype, \
-    ndarray, recarray, array as narray
 import numpy.core.numerictypes as ntypes
-from numpy.core.records import fromarrays as recfromarrays, \
-                               fromrecords as recfromrecords
+from numpy.compat import basestring
+from numpy import (
+        bool_, dtype, ndarray, recarray, array as narray
+        )
+from numpy.core.records import (
+        fromarrays as recfromarrays, fromrecords as recfromrecords
+        )
 
 _byteorderconv = np.core.records._byteorderconv
 _typestr = ntypes._typestr
@@ -34,7 +41,6 @@ from numpy.ma import MAError, MaskedArray, masked, nomask, masked_array, \
 
 _check_fill_value = ma.core._check_fill_value
 
-import warnings
 
 __all__ = ['MaskedRecords', 'mrecarray',
            'fromarrays', 'fromrecords', 'fromtextfile', 'addfield',
@@ -52,7 +58,7 @@ def _getformats(data):
         obj = np.asarray(obj)
         formats += _typestr[obj.dtype.type]
         if issubclass(obj.dtype.type, ntypes.flexible):
-            formats += `obj.itemsize`
+            formats += repr(obj.itemsize)
         formats += ','
     return formats[:-1]
 
@@ -71,7 +77,7 @@ If the argument `names` is not None, updates the field names to valid names.
         elif isinstance(names, str):
             new_names = names.split(',')
         else:
-            raise NameError("illegal input names %s" % `names`)
+            raise NameError("illegal input names %s" % repr(names))
         nnames = len(new_names)
         if nnames < ndescr:
             new_names += default_names[nnames:]
@@ -252,7 +258,7 @@ class MaskedRecords(MaskedArray, object):
             optinfo = ndarray.__getattribute__(self, '_optinfo') or {}
             if not (attr in fielddict or attr in optinfo):
                 exctype, value = sys.exc_info()[:2]
-                raise exctype, value
+                raise exctype(value)
         else:
             # Get the list of names ......
             fielddict = ndarray.__getattribute__(self, 'dtype').fields or {}
@@ -505,7 +511,7 @@ def fromarrays(arraylist, dtype=None, shape=None, formats=None,
                            dtype=dtype, shape=shape, formats=formats,
                            names=names, titles=titles, aligned=aligned,
                            byteorder=byteorder).view(mrecarray)
-    _array._mask.flat = zip(*masklist)
+    _array._mask.flat = list(zip(*masklist))
     if fill_value is not None:
         _array.fill_value = fill_value
     return _array

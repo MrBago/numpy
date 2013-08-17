@@ -1,9 +1,7 @@
-__all__ = ['savetxt', 'loadtxt', 'genfromtxt', 'ndfromtxt', 'mafromtxt',
-           'recfromtxt', 'recfromcsv', 'load', 'loads', 'save', 'savez',
-           'savez_compressed', 'packbits', 'unpackbits', 'fromregex', 'DataSource']
+from __future__ import division, absolute_import, print_function
 
 import numpy as np
-import format
+from . import format
 import sys
 import os
 import re
@@ -13,21 +11,31 @@ import warnings
 import weakref
 from operator import itemgetter
 
-from cPickle import load as _cload, loads
-from _datasource import DataSource
-from _compiled_base import packbits, unpackbits
+from ._datasource import DataSource
+from ._compiled_base import packbits, unpackbits
 
-from _iotools import LineSplitter, NameValidator, StringConverter, \
-                     ConverterError, ConverterLockError, ConversionWarning, \
-                     _is_string_like, has_nested_fields, flatten_dtype, \
-                     easy_dtype, _bytes_to_name
+from ._iotools import (
+        LineSplitter, NameValidator, StringConverter,
+        ConverterError, ConverterLockError, ConversionWarning,
+        _is_string_like, has_nested_fields, flatten_dtype,
+        easy_dtype, _bytes_to_name
+        )
 
-from numpy.compat import asbytes, asstr, asbytes_nested, bytes
+from numpy.compat import (
+        asbytes, asstr, asbytes_nested, bytes, basestring, unicode
+        )
 
 if sys.version_info[0] >= 3:
-    from io import BytesIO
+    import pickle
 else:
-    from cStringIO import StringIO as BytesIO
+    import cPickle as pickle
+    from future_builtins import map
+
+loads = pickle.loads
+
+__all__ = ['savetxt', 'loadtxt', 'genfromtxt', 'ndfromtxt', 'mafromtxt',
+           'recfromtxt', 'recfromcsv', 'load', 'loads', 'save', 'savez',
+           'savez_compressed', 'packbits', 'unpackbits', 'fromregex', 'DataSource']
 
 _string_like = _is_string_like
 
@@ -119,8 +127,7 @@ class BagObj(object):
 
 def zipfile_factory(*args, **kwargs):
     import zipfile
-    if sys.version_info >= (2, 5):
-        kwargs['allowZip64'] = True
+    kwargs['allowZip64'] = True
     return zipfile.ZipFile(*args, **kwargs)
 
 class NpzFile(object):
@@ -235,12 +242,14 @@ class NpzFile(object):
             member = 1
             key += '.npy'
         if member:
-            bytes = self.zip.read(key)
-            if bytes.startswith(format.MAGIC_PREFIX):
-                value = BytesIO(bytes)
-                return format.read_array(value)
+            bytes = self.zip.open(key)
+            magic = bytes.read(len(format.MAGIC_PREFIX))
+            bytes.close()
+            if magic == format.MAGIC_PREFIX:
+                bytes = self.zip.open(key)
+                return format.read_array(bytes)
             else:
-                return bytes
+                return self.zip.read(key)
         else:
             raise KeyError("%s is not a file in the archive" % key)
 
@@ -281,7 +290,7 @@ def load(file, mmap_mode=None):
     file : file-like object or string
         The file to read.  It must support ``seek()`` and ``read()`` methods.
         If the filename extension is ``.gz``, the file is first decompressed.
-    mmap_mode: {None, 'r+', 'r', 'w+', 'c'}, optional
+    mmap_mode : {None, 'r+', 'r', 'w+', 'c'}, optional
         If not None, then memory-map the file, using the given mode
         (see `numpy.memmap` for a detailed description of the modes).
         A memory-mapped array is kept on disk. However, it can be accessed
@@ -368,17 +377,22 @@ def load(file, mmap_mode=None):
         N = len(format.MAGIC_PREFIX)
         magic = fid.read(N)
         fid.seek(-N, 1) # back-up
-        if magic.startswith(_ZIP_PREFIX):  # zip-file (assume .npz)
+        if magic.startswith(_ZIP_PREFIX):
+            # zip-file (assume .npz)
+            # Transfer file ownership to NpzFile
+            tmp = own_fid
             own_fid = False
-            return NpzFile(fid, own_fid=own_fid)
-        elif magic == format.MAGIC_PREFIX: # .npy file
+            return NpzFile(fid, own_fid=tmp)
+        elif magic == format.MAGIC_PREFIX:
+            # .npy file
             if mmap_mode:
                 return format.open_memmap(file, mode=mmap_mode)
             else:
                 return format.read_array(fid)
-        else:  # Try a pickle
+        else:
+            # Try a pickle
             try:
-                return _cload(fid)
+                return pickle.load(fid)
             except:
                 raise IOError(
                     "Failed to interpret file %s as a pickle" % repr(file))
@@ -568,7 +582,7 @@ def _savez(file, args, kwds, compress):
     fd, tmpfile = tempfile.mkstemp(suffix='-numpy.npy')
     os.close(fd)
     try:
-        for key, val in namedict.iteritems():
+        for key, val in namedict.items():
             fname = key + '.npy'
             fid = open(tmpfile, 'wb')
             try:
@@ -778,15 +792,15 @@ def loadtxt(fname, dtype=float, comments='#', delimiter=None,
         defconv = _getconv(dtype)
 
         # Skip the first `skiprows` lines
-        for i in xrange(skiprows):
-            fh.next()
+        for i in range(skiprows):
+            next(fh)
 
         # Read until we find a line with some values, and use
         # it to estimate the number of columns, N.
         first_vals = None
         try:
             while not first_vals:
-                first_line = fh.next()
+                first_line = next(fh)
                 first_vals = split_line(first_line)
         except StopIteration:
             # End of lines reached
@@ -802,12 +816,12 @@ def loadtxt(fname, dtype=float, comments='#', delimiter=None,
             converters = [_getconv(dt) for dt in dtype_types]
         else:
             # All fields have the same dtype
-            converters = [defconv for i in xrange(N)]
+            converters = [defconv for i in range(N)]
             if N > 1:
                 packing = [(N, tuple)]
 
         # By preference, use the converters specified by the user
-        for i, conv in (user_converters or {}).iteritems():
+        for i, conv in (user_converters or {}).items():
             if usecols:
                 try:
                     i = usecols.index(i)
@@ -988,7 +1002,7 @@ def savetxt(fname, X, fmt='%.18e', delimiter=' ', newline='\n', header='',
                 fh = open(fname, 'wb')
             else:
                 fh = open(fname, 'w')
-    elif hasattr(fname, 'seek'):
+    elif hasattr(fname, 'write'):
         fh = fname
     else:
         raise ValueError('fname must be a string or file handle')
@@ -1016,7 +1030,7 @@ def savetxt(fname, X, fmt='%.18e', delimiter=' ', newline='\n', header='',
             if len(fmt) != ncol:
                 raise AttributeError('fmt has wrong shape.  %s' % str(fmt))
             format = asstr(delimiter).join(map(asstr, fmt))
-        elif type(fmt) is str:
+        elif isinstance(fmt, str):
             n_fmt_chars = fmt.count('%')
             error = ValueError('fmt has wrong number of %% formats:  %s' % fmt)
             if n_fmt_chars == 1:
@@ -1337,14 +1351,14 @@ def genfromtxt(fname, dtype=float, comments='#', delimiter=None,
             DeprecationWarning)
         skip_header = skiprows
     # Skip the first `skip_header` rows
-    for i in xrange(skip_header):
-        fhd.next()
+    for i in range(skip_header):
+        next(fhd)
 
     # Keep on until we find the first valid values
     first_values = None
     try:
         while not first_values:
-            first_line = fhd.next()
+            first_line = next(fhd)
             if names is True:
                 if comments in first_line:
                     first_line = asbytes('').join(first_line.split(comments)[1:])
@@ -1598,12 +1612,12 @@ def genfromtxt(fname, dtype=float, comments='#', delimiter=None,
     # Upgrade the converters (if needed)
     if dtype is None:
         for (i, converter) in enumerate(converters):
-            current_column = map(itemgetter(i), rows)
+            current_column = [itemgetter(i)(_m) for _m in rows]
             try:
                 converter.iterupgrade(current_column)
             except ConverterLockError:
                 errmsg = "Converter #%i is locked and cannot be upgraded: " % i
-                current_column = itertools.imap(itemgetter(i), rows)
+                current_column = map(itemgetter(i), rows)
                 for (j, value) in enumerate(current_column):
                     try:
                         converter.upgrade(value)
@@ -1649,19 +1663,20 @@ def genfromtxt(fname, dtype=float, comments='#', delimiter=None,
 
     # Convert each value according to the converter:
     # We want to modify the list in place to avoid creating a new one...
-#    if loose:
-#        conversionfuncs = [conv._loose_call for conv in converters]
-#    else:
-#        conversionfuncs = [conv._strict_call for conv in converters]
-#    for (i, vals) in enumerate(rows):
-#        rows[i] = tuple([convert(val)
-#                         for (convert, val) in zip(conversionfuncs, vals)])
+    #
+    #    if loose:
+    #        conversionfuncs = [conv._loose_call for conv in converters]
+    #    else:
+    #        conversionfuncs = [conv._strict_call for conv in converters]
+    #    for (i, vals) in enumerate(rows):
+    #        rows[i] = tuple([convert(val)
+    #                         for (convert, val) in zip(conversionfuncs, vals)])
     if loose:
-        rows = zip(*[map(converter._loose_call, map(itemgetter(i), rows))
-                     for (i, converter) in enumerate(converters)])
+        rows = list(zip(*[[converter._loose_call(_r) for _r in map(itemgetter(i), rows)]
+                     for (i, converter) in enumerate(converters)]))
     else:
-        rows = zip(*[map(converter._strict_call, map(itemgetter(i), rows))
-                     for (i, converter) in enumerate(converters)])
+        rows = list(zip(*[[converter._strict_call(_r) for _r in map(itemgetter(i), rows)]
+                     for (i, converter) in enumerate(converters)]))
     # Reset the dtype
     data = rows
     if dtype is None:
@@ -1686,8 +1701,8 @@ def genfromtxt(fname, dtype=float, comments='#', delimiter=None,
                     mdtype = [(defaultfmt % i, np.bool)
                               for (i, dt) in enumerate(column_types)]
         else:
-            ddtype = zip(names, column_types)
-            mdtype = zip(names, [np.bool] * len(column_types))
+            ddtype = list(zip(names, column_types))
+            mdtype = list(zip(names, [np.bool] * len(column_types)))
         output = np.array(data, dtype=ddtype)
         if usemask:
             outputmask = np.array(masks, dtype=mdtype)

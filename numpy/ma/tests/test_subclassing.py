@@ -4,7 +4,10 @@
 :author: Pierre Gerard-Marchant
 :contact: pierregm_at_uga_dot_edu
 :version: $Id: test_subclassing.py 3473 2007-10-29 15:18:13Z jarrod.millman $
+
 """
+from __future__ import division, absolute_import, print_function
+
 __author__ = "Pierre GF Gerard-Marchant ($Author: jarrod.millman $)"
 __version__ = '1.0'
 __revision__ = "$Revision: 3473 $"
@@ -93,12 +96,9 @@ class TestSubclassing(TestCase):
     def test_masked_unary_operations(self):
         "Tests masked_unary_operation"
         (x, mx) = self.data
-        olderr = np.seterr(divide='ignore')
-        try:
+        with np.errstate(divide='ignore'):
             self.assertTrue(isinstance(log(mx), mmatrix))
             assert_equal(log(x), np.log(x))
-        finally:
-            np.seterr(**olderr)
 
     def test_masked_binary_operations(self):
         "Tests masked_binary_operation"
@@ -113,7 +113,7 @@ class TestSubclassing(TestCase):
         self.assertTrue(isinstance(hypot(mx,mx), mmatrix))
         self.assertTrue(isinstance(hypot(mx,x), mmatrix))
 
-    def test_masked_binary_operations(self):
+    def test_masked_binary_operations2(self):
         "Tests domained_masked_binary_operation"
         (x, mx) = self.data
         xmx = masked_array(mx.data.__array__(), mask=mx.mask)

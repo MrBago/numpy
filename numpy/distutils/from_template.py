@@ -45,6 +45,7 @@ process_file(filename)
   <ctypereal=float,double,\\0,\\1>
 
 """
+from __future__ import division, absolute_import, print_function
 
 __all__ = ['process_str','process_file']
 
@@ -64,13 +65,13 @@ def parse_structure(astr):
 
     spanlist = []
     ind = 0
-    while 1:
+    while True:
         m = routine_start_re.search(astr,ind)
         if m is None:
             break
         start = m.start()
         if function_start_re.match(astr,start,m.end()):
-            while 1:
+            while True:
                 i = astr.rfind('\n',ind,start)
                 if i==-1:
                     break
@@ -110,7 +111,7 @@ def conv(astr):
 
 def unique_key(adict):
     """ Obtain a unique key given a dictionary."""
-    allkeys = adict.keys()
+    allkeys = list(adict.keys())
     done = False
     n = 1
     while not done:
@@ -165,10 +166,9 @@ def expand_sub(substr,names):
             elif num == numsubs:
                 rules[r] = rule
             else:
-                print("Mismatch in number of replacements (base <%s=%s>)"\
-                      " for <%s=%s>. Ignoring." % (base_rule,
-                                                  ','.join(rules[base_rule]),
-                                                  r,thelist))
+                print("Mismatch in number of replacements (base <%s=%s>)"
+                      " for <%s=%s>. Ignoring." %
+                      (base_rule, ','.join(rules[base_rule]), r,thelist))
     if not rules:
         return substr
 
@@ -208,14 +208,14 @@ def resolve_includes(source):
     d = os.path.dirname(source)
     fid = open(source)
     lines = []
-    for line in fid.readlines():
+    for line in fid:
         m = include_src_re.match(line)
         if m:
             fn = m.group('name')
             if not os.path.isabs(fn):
                 fn = os.path.join(d,fn)
             if os.path.isfile(fn):
-                print ('Including file',fn)
+                print('Including file', fn)
                 lines.extend(resolve_includes(fn))
             else:
                 lines.append(line)

@@ -1,8 +1,10 @@
+from __future__ import division, absolute_import, print_function
+
 from scipy import weave, zeros_like
 
 def filter(a):
     if a.ndim != 2:
-        raise ValueError, "a must be 2-d"
+        raise ValueError("a must be 2-d")
     code = r"""
     int i,j;
     for(i=1;i<Na[0]-1;i++) {
